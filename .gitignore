@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# API keys and secrets — NEVER commit these
+.env
+*.key
+secrets.json
+config.local.json
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Ollama / model files (too large for git)
+*.gguf
+*.bin
+models/
+
+# DeepEval local cache
+.deepeval/
+.deepeval_telemetry.txt
+
+# Logs and temp outputs
+*.log
+temp/
+tmp/
+
+# Large result artifacts (keep results/ folder but ignore raw dumps if huge)
+*.pkl
