@@ -6,9 +6,7 @@
 # ============================================================
 
 import requests
-
-OLLAMA_URL = "http://localhost:11434/api/generate"
-LOCAL_MODEL = "qwen2.5:0.5b"
+from config import OLLAMA_URL, LOCAL_MODEL, LOCAL_TIMEOUT
 
 
 def run(task_description: str) -> str:
@@ -24,7 +22,7 @@ Python code:"""
     response = requests.post(
         OLLAMA_URL,
         json={"model": LOCAL_MODEL, "prompt": prompt, "stream": False},
-        timeout=120
+        timeout=LOCAL_TIMEOUT
     )
 
     result = response.json().get("response", "").strip()

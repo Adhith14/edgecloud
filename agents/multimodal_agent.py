@@ -8,7 +8,7 @@
 
 import base64
 import openai
-
+from config import CLOUD_VISION_MODEL
 
 def encode_image(image_path: str) -> str:
     """Reads an image file and converts it to a base64 string."""
@@ -23,7 +23,7 @@ def run(image_path: str, client: openai.OpenAI) -> dict:
     mime_type = f"image/{ext}" if ext != "jpg" else "image/jpeg"
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=CLOUD_VISION_MODEL,
         messages=[
             {
                 "role": "user",

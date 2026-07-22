@@ -19,7 +19,7 @@
 
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from deepeval.metrics import GEval
-
+from config import DEEPEVAL_MODEL, PASS_THRESHOLD
 
 # One judging config per task. "criteria" tells the judge what to
 # look for; "expected_output" is the reference ideal answer.
@@ -104,8 +104,8 @@ def score_with_deepeval(task_id: str, agent_input: str, agent_output: str) -> di
             LLMTestCaseParams.ACTUAL_OUTPUT,
             LLMTestCaseParams.EXPECTED_OUTPUT,
         ],
-        model="gpt-4o-mini",
-        threshold=0.5
+        model=DEEPEVAL_MODEL,
+        threshold=PASS_THRESHOLD
     )
 
     test_case = LLMTestCase(

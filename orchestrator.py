@@ -10,7 +10,7 @@
 
 import json
 import openai
-
+from config import CLOUD_ORCHESTRATOR_MODEL, CLOUD_TEMPERATURE
 
 def plan_tasks(tasks: list, client: openai.OpenAI) -> dict:
     """Cloud LLM produces a delegation plan: which agent handles which task."""
@@ -40,10 +40,10 @@ Example format:
 ]"""
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=CLOUD_ORCHESTRATOR_MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=500,
-        temperature=0
+        temperature=CLOUD_TEMPERATURE
     )
 
     raw = response.choices[0].message.content.strip()
@@ -78,10 +78,10 @@ AGENT RESULTS:
 OVERALL SUMMARY:"""
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=CLOUD_ORCHESTRATOR_MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=400,
-        temperature=0.3
+        temperature=CLOUD_TEMPERATURE
     )
 
     return {"summary": response.choices[0].message.content.strip(),

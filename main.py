@@ -20,6 +20,7 @@
 
 import os
 import openai
+import config
 
 from orchestrator import plan_tasks, synthesize_results
 from agents.file_agent       import run as run_file_agent
@@ -27,11 +28,9 @@ from agents.code_agent       import run as run_code_agent
 from agents.planning_agent   import run as run_planning_agent
 from agents.document_agent   import run as run_document_agent
 from agents.multimodal_agent import run as run_multimodal_agent
-from evaluator import TaskResult, print_results_table
-
-# ── TOGGLE: True = DeepEval scoring, False = keyword heuristic ──
-USE_DEEPEVAL = True
-
+from evaluator import TaskResult, print_results_table, save_results_csv
+from escalation import escalate_to_cloud
+from evaluator import calculate_cost
 
 TASKS = [
     {"id": "A1", "category": "A-File/Log",   "description": "Read the server log and extract all ERROR-level events with timestamps, then summarise the root cause in one sentence.", "agent": "file_agent"},
@@ -42,22 +41,74 @@ TASKS = [
 ]
 
 
+def handle_escalation(r, task_description, task_input, client):
+    """
+    Checks whether a local task result should be escalated to the cloud.
+    Called AFTER the local agent has run and been scored.
+
+    Logic (Option A - score-based):
+      - If escalation is enabled AND the task has a DeepEval score AND
+        that score is below the escalation threshold → escalate to cloud.
+      - The cloud's answer replaces the local output.
+      - We keep a record of the original local output and score.
+
+    Args:
+        r: the TaskResult object (already scored)
+        task_description: what the task asked for
+        task_input: the data given to the task
+        client: OpenAI client
+    """
+    # Only escalate if enabled in config
+    if not config.ENABLE_ESCALATION:
+        return
+
+    # We can only score-escalate tasks that have a numeric DeepEval score.
+    # (B1 code tasks use execution, not a score — skip those here.)
+    if r.score is None:
+        return
+
+    # The decision: is the local score below the threshold?
+    if r.score < config.ESCALATION_THRESHOLD:
+        print(f"    [ESCALATION] {r.task_id} scored {r.score} < {config.ESCALATION_THRESHOLD} — escalating to cloud...")
+
+        # Remember what the local model produced before we replace it
+        r.local_output = r.output
+        r.local_score  = r.score
+
+        # Send the task to the cloud for a better answer
+        cloud_result = escalate_to_cloud(task_description, task_input, client)
+
+        # Replace the output with the cloud's answer
+        r.output = cloud_result["output"]
+
+        # Record that this task was escalated, and log the cloud call
+        r.escalated = True
+        r.record_cloud_call(cloud_result["tokens_used"], task_input, model=config.CLOUD_ESCALATION_MODEL)
+
+        # Re-score the new cloud output so the final score reflects the escalated answer
+        r.finalise(use_deepeval=config.USE_DEEPEVAL)
+
+        print(f"    [ESCALATION] {r.task_id} re-scored after cloud: {r.score}")
+    else:
+        print(f"    [LOCAL OK] {r.task_id} scored {r.score} — kept local, no escalation.")
+
+
 def main():
     print("\n" + "="*60)
     print("  The Edge-Cloud Swarm — 5-Task Prototype")
-    print(f"  Scoring mode: {'DeepEval (GEval)' if USE_DEEPEVAL else 'Keyword heuristic'}")
+    print(f"  Scoring mode: {'DeepEval (GEval)' if config.USE_DEEPEVAL else 'Keyword heuristic'}")
     print("="*60)
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        api_key = input("\nEnter your OpenAI API key: ").strip()
-        os.environ["OPENAI_API_KEY"] = api_key   # DeepEval reads this too
+        raise ValueError("OPENAI_API_KEY not found. Add it to your .env file.")
 
     client = openai.OpenAI(api_key=api_key)
 
     # ── STEP 1: PLAN ─────────────────────────────────────────
     print("\n[1/4] Cloud CEO planning task delegation...")
     plan_result = plan_tasks(TASKS, client)
+    orchestration_tokens = plan_result["tokens_used"]
     for item in plan_result["plan"]:
         print(f"      -> Task {item.get('task_id','?')} -> {item.get('agent','?')}: {item.get('reason','')}")
 
@@ -79,28 +130,34 @@ def main():
     r = TaskResult("A1", "A-File/Log", "file_agent [LOCAL]")
     r.input_text = "Extract ERROR-level events from the server log and summarise the root cause."
     r.start(); r.output = run_file_agent(log_content); r.stop()
-    r.finalise(use_deepeval=USE_DEEPEVAL); results.append(r)
+    r.finalise(use_deepeval=config.USE_DEEPEVAL)
+    handle_escalation(r, "Extract ERROR-level events from the server log and summarise the root cause.", log_content, client)
+    results.append(r)
 
     # B1 — Code Agent (LOCAL)
     print("  B1 - Code Agent (LOCAL)...")
     r = TaskResult("B1", "B-Code", "code_agent [LOCAL]")
     r.input_text = "Write a Python function is_prime(n)."
     r.start(); r.output = run_code_agent("Write a Python function called is_prime(n) that returns True if n is prime."); r.stop()
-    r.finalise(use_deepeval=USE_DEEPEVAL); results.append(r)
+    r.finalise(use_deepeval=config.USE_DEEPEVAL); results.append(r)
 
     # C1 — Planning Agent (LOCAL)
     print("  C1 - Planning Agent (LOCAL)...")
     r = TaskResult("C1", "C-Planning", "planning_agent [LOCAL]")
     r.input_text = "Decompose: build a data pipeline that reads CSVs, cleans data, outputs a summary."
     r.start(); r.output = run_planning_agent("Build a data pipeline that reads CSV files, cleans the data, and outputs a summary report."); r.stop()
-    r.finalise(use_deepeval=USE_DEEPEVAL); results.append(r)
+    r.finalise(use_deepeval=config.USE_DEEPEVAL)
+    handle_escalation(r, "Decompose into ordered subtasks: build a data pipeline that reads CSV files, cleans the data, and outputs a summary report.", "Build a data pipeline that reads CSV files, cleans the data, and outputs a summary report.", client)
+    results.append(r)
 
     # D1 — Document Agent (LOCAL)
     print("  D1 - Document Agent (LOCAL)...")
     r = TaskResult("D1", "D-Document", "document_agent [LOCAL]")
     r.input_text = "Summarise the edge computing document in 2-3 sentences."
     r.start(); r.output = run_document_agent(doc_content); r.stop()
-    r.finalise(use_deepeval=USE_DEEPEVAL); results.append(r)
+    r.finalise(use_deepeval=config.USE_DEEPEVAL)
+    handle_escalation(r, "Summarise the provided document in 2-3 sentences.", doc_content, client)
+    results.append(r)
 
     # E1 — Multimodal Agent (CLOUD)
     print("  E1 - Multimodal Agent (CLOUD)...")
@@ -111,7 +168,7 @@ def main():
         e1 = run_multimodal_agent(screenshot_path, client)
         r.output = e1["response"]
         r.record_cloud_call(e1["tokens_used"], "image_task", model="gpt-4o")
-        r.finalise(use_deepeval=USE_DEEPEVAL)
+        r.finalise(use_deepeval=config.USE_DEEPEVAL)
     else:
         r.output = "[SKIPPED] No screenshot at tasks/error_screenshot.png. Add any screenshot to test this task."
         r.success = None
@@ -125,6 +182,7 @@ def main():
         for r in results if r.output and "[SKIPPED]" not in r.output
     ]
     synthesis = synthesize_results(synthesis_input, client)
+    orchestration_tokens += synthesis["tokens_used"]
 
     # ── OUTPUTS ─────────────────────────────────────────────
     print("\n[4/4] Agent Outputs:")
@@ -137,7 +195,13 @@ def main():
     print("-"*60)
     print(synthesis["summary"])
 
+    # Calculate the orchestrator's own cost (planning + synthesis)
+    orchestration_cost = calculate_cost(orchestration_tokens, config.CLOUD_ORCHESTRATOR_MODEL)
+    print(f"\n  Orchestration overhead: {orchestration_tokens} tokens  =  ${orchestration_cost:.6f}")
+    print(f"  (This is the cost of the cloud CEO planning and synthesis, separate from per-task costs)")
+
     print_results_table(results)
+    save_results_csv(results, model_name=config.LOCAL_MODEL)
 
 
 if __name__ == "__main__":

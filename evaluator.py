@@ -16,6 +16,9 @@
 
 import time
 from tabulate import tabulate
+import csv
+import os
+from datetime import datetime
 
 # ── OpenAI pricing (approx, gpt-4o-mini & gpt-4o, 2026) ──────
 GPT4O_MINI_INPUT_COST_PER_1K  = 0.000150
@@ -86,6 +89,9 @@ class TaskResult:
         self.score_method = ""
         self.reason       = ""     # DeepEval judge reason, if used
         self.start_time   = None
+        self.escalated       = False   # True if this task was escalated to cloud
+        self.local_score     = None    # the local model's score before escalation
+        self.local_output    = ""      # what the local agent produced (kept for the record)
 
     def start(self):
         self.start_time = time.time()
@@ -137,6 +143,7 @@ def print_results_table(results):
             r.task_id, r.category, r.agent,
             success_str,
             f"{r.score}" if r.score is not None else "-",
+            "YES" if r.escalated else "no",
             f"{r.latency_s}s",
             r.cloud_calls,
             f"${r.cost_usd:.6f}",
@@ -144,7 +151,7 @@ def print_results_table(results):
             r.score_method
         ])
 
-    headers = ["Task", "Category", "Agent", "Result", "Score",
+    headers = ["Task", "Category", "Agent", "Result", "Score", "Escalated",
                "Latency", "Cloud", "Est.Cost", "Data->Cloud", "Method"]
 
     print("\n" + "="*100)
@@ -174,3 +181,58 @@ def print_results_table(results):
         for r in deepeval_results:
             print(f"  [{r.task_id}] score={r.score} — {r.reason}")
         print("="*100 + "\n")
+        
+        
+def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepath="results/results.csv"):
+    """
+    Appends this run's results to a CSV file so they persist across runs.
+    Each row = one task. A timestamp and model name tag every row so you
+    can compare different runs and different models later.
+
+    Args:
+        results: list of completed TaskResult objects
+        model_name: which local model was used (from config.LOCAL_MODEL)
+        system_name: which system produced these (for later baseline comparison)
+        filepath: where to save the CSV
+    """
+    # Make sure the results/ folder exists
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    # Check if the file already exists — if not, we'll write a header row first
+    file_exists = os.path.isfile(filepath)
+
+    # One timestamp for the whole run, so all rows from this run share it
+    run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with open(filepath, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # Write the header row only once (when the file is first created)
+        if not file_exists:
+            writer.writerow([
+                "run_time", "system", "model", "task_id", "category", "agent",
+                "success", "score", "escalated", "local_score", "latency_s", "cloud_calls",
+                "cost_usd", "data_kb", "score_method"
+            ])
+
+        # Write one row per task
+        for r in results:
+            writer.writerow([
+                run_time,
+                system_name,
+                model_name,
+                r.task_id,
+                r.category,
+                r.agent,
+                r.success,          # True / False / None(skipped)
+                r.score if r.score is not None else "",
+                r.escalated,
+                r.local_score if r.local_score is not None else "",
+                r.latency_s,
+                r.cloud_calls,
+                round(r.cost_usd, 6),
+                round(r.data_kb, 3),
+                r.score_method
+            ])
+
+    print(f"\n  Results saved to {filepath}")
