@@ -24,3 +24,8 @@ run_time,system,model,task_id,category,agent,success,score,escalated,local_score
 2026-07-25 21:29:47,edge-cloud-swarm,qwen2.5:0.5b,C1,C-Planning,planning_agent [LOCAL],True,0.673,False,,0.79,0,0.0,0.0,DeepEval GEval (0.673)
 2026-07-25 21:29:47,edge-cloud-swarm,qwen2.5:0.5b,D1,D-Document,document_agent [LOCAL],True,0.794,False,,0.53,0,0.0,0.0,DeepEval GEval (0.794)
 2026-07-25 21:29:47,edge-cloud-swarm,qwen2.5:0.5b,E1,E-Multimodal,multimodal_agent [CLOUD],True,0.876,False,,4.79,1,0.004785,0.01,DeepEval GEval (0.876)
+2026-07-25 22:16:20,edge-cloud-swarm,qwen2.5:0.5b,A1,A-File/Log,file_agent [LOCAL],True,0.548,False,,3.25,0,0.0,0.0,DeepEval GEval (0.548)
+2026-07-25 22:16:20,edge-cloud-swarm,qwen2.5:0.5b,B1,B-Code,code_agent [LOCAL],True,,False,,0.69,0,0.0,0.0,automated (exec + function check)
+2026-07-25 22:16:20,edge-cloud-swarm,qwen2.5:0.5b,C1,C-Planning,planning_agent [LOCAL],True,0.611,False,,0.53,0,0.0,0.0,DeepEval GEval (0.611)
+2026-07-25 22:16:20,edge-cloud-swarm,qwen2.5:0.5b,D1,D-Document,document_agent [LOCAL],True,0.794,False,,0.52,0,0.0,0.0,DeepEval GEval (0.794)
+2026-07-25 22:16:20,edge-cloud-swarm,qwen2.5:0.5b,E1,E-Multimodal,multimodal_agent [CLOUD],True,0.838,False,,5.4,1,0.004829,0.01,DeepEval GEval (0.838)

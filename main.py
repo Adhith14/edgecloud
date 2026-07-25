@@ -64,12 +64,25 @@ def handle_escalation(r, task_description, task_input, client):
 
     # We can only score-escalate tasks that have a numeric DeepEval score.
     # (B1 code tasks use execution, not a score — skip those here.)
-    if r.score is None:
-        return
+    # Decide whether this task needs escalation.
+    # Two cases:
+    #   1. Code tasks (no DeepEval score) → escalate if execution FAILED
+    #   2. Scored tasks → escalate if score is below threshold
+    needs_escalation = False
 
-    # The decision: is the local score below the threshold?
-    if r.score < config.ESCALATION_THRESHOLD:
-        print(f"    [ESCALATION] {r.task_id} scored {r.score} < {config.ESCALATION_THRESHOLD} — escalating to cloud...")
+    if r.score is None:
+        # Code task: it was scored by execution. r.success is True/False.
+        # Escalate if the code did NOT pass execution.
+        if r.success is False:
+            needs_escalation = True
+    else:
+        # Scored task: escalate if below threshold
+        if r.score < config.ESCALATION_THRESHOLD:
+            needs_escalation = True
+
+    if needs_escalation:
+        reason = f"scored {r.score} < {config.ESCALATION_THRESHOLD}" if r.score is not None else "code execution failed"
+        print(f"    [ESCALATION] {r.task_id} {reason} — escalating to cloud...")
 
         # Remember what the local model produced before we replace it
         r.local_output = r.output
@@ -90,7 +103,8 @@ def handle_escalation(r, task_description, task_input, client):
 
         print(f"    [ESCALATION] {r.task_id} re-scored after cloud: {r.score}")
     else:
-        print(f"    [LOCAL OK] {r.task_id} scored {r.score} — kept local, no escalation.")
+        status = f"scored {r.score}" if r.score is not None else "code passed"
+        print(f"    [LOCAL OK] {r.task_id} {status} — kept local, no escalation.")
 
 
 def main():
@@ -139,7 +153,9 @@ def main():
     r = TaskResult("B1", "B-Code", "code_agent [LOCAL]")
     r.input_text = "Write a Python function is_prime(n)."
     r.start(); r.output = run_code_agent("Write a Python function called is_prime(n) that returns True if n is prime."); r.stop()
-    r.finalise(use_deepeval=config.USE_DEEPEVAL); results.append(r)
+    r.finalise(use_deepeval=config.USE_DEEPEVAL)
+    handle_escalation(r, "Write a Python function called is_prime(n) that returns True if n is prime.", "Write a Python function called is_prime(n) that returns True if n is prime.", client)
+    results.append(r)
 
     # C1 — Planning Agent (LOCAL)
     print("  C1 - Planning Agent (LOCAL)...")
