@@ -31,14 +31,7 @@ from agents.multimodal_agent import run as run_multimodal_agent
 from evaluator import TaskResult, print_results_table, save_results_csv
 from escalation import escalate_to_cloud
 from evaluator import calculate_cost
-
-TASKS = [
-    {"id": "A1", "category": "A-File/Log",   "description": "Read the server log and extract all ERROR-level events with timestamps, then summarise the root cause in one sentence.", "agent": "file_agent"},
-    {"id": "B1", "category": "B-Code",       "description": "Write a Python function is_prime(n) that returns True if n is prime, else False.", "agent": "code_agent"},
-    {"id": "C1", "category": "C-Planning",   "description": "Decompose: build a data pipeline that reads CSV files, cleans the data, and outputs a summary report.", "agent": "planning_agent"},
-    {"id": "D1", "category": "D-Document",   "description": "Summarise the provided edge computing document in 2-3 sentences.", "agent": "document_agent"},
-    {"id": "E1", "category": "E-Multimodal", "description": "Analyse the provided screenshot and describe any errors/issues, then suggest a fix.", "agent": "multimodal_agent"},
-]
+from benchmark import TASKS
 
 
 def handle_escalation(r, task_description, task_input, client):
@@ -107,91 +100,157 @@ def handle_escalation(r, task_description, task_input, client):
         print(f"    [LOCAL OK] {r.task_id} {status} — kept local, no escalation.")
 
 
+def load_task_input(task):
+    """
+    Loads the input for a task based on its input_type.
+    Returns the input as a string (or the image path for multimodal).
+
+    - "log" / "document"  -> read the single file, return its text
+    - "text" / "none"     -> the input is already inline, return it as-is
+    - "image"             -> return the image file path (not the contents)
+    - "multi"             -> read all files in the list, combine into one
+                             labelled string
+    """
+    itype = task["input_type"]
+    ref   = task["input_ref"]
+
+    if itype in ("log", "document"):
+        # Single text file — read and return its contents
+        with open(ref, "r", encoding="utf-8") as f:
+            return f.read()
+
+    elif itype in ("text", "none"):
+        # Inline text — already in input_ref
+        return ref
+
+    elif itype == "image":
+        # For images we return the PATH; the multimodal agent reads it
+        return ref
+
+    elif itype == "multi":
+        # Multiple files — read each, label it, combine
+        combined = []
+        for path in ref:
+            with open(path, "r", encoding="utf-8") as f:
+                combined.append(f"=== FILE: {path} ===\n{f.read()}")
+        return "\n\n".join(combined)
+
+    else:
+        raise ValueError(f"Unknown input_type: {itype}")
+
+    
+def run_agent_for_task(task, task_input, client):
+    """
+    Routes a task to the correct agent and runs it.
+
+    Args:
+        task:       the task dict from benchmark.py
+        task_input: the loaded input (text, or an image path for multimodal)
+        client:     the OpenAI client (only used by the multimodal agent)
+
+    Returns:
+        dict with:
+          "output"      - the agent's text output
+          "tokens_used" - cloud tokens consumed (0 for local agents)
+          "is_cloud"    - True if this agent ran in the cloud
+    """
+    agent_name = task["agent"]
+
+    # ── LOCAL AGENTS (Ollama — no cloud cost) ───────────────
+    if agent_name == "file_agent":
+        return {"output": run_file_agent(task_input), "tokens_used": 0, "is_cloud": False}
+
+    elif agent_name == "code_agent":
+        return {"output": run_code_agent(task["description"]), "tokens_used": 0, "is_cloud": False}
+
+    elif agent_name == "planning_agent":
+        return {"output": run_planning_agent(task_input), "tokens_used": 0, "is_cloud": False}
+
+    elif agent_name == "document_agent":
+        return {"output": run_document_agent(task_input), "tokens_used": 0, "is_cloud": False}
+
+    # ── CLOUD AGENT (vision — local SLMs can't do images) ───
+    elif agent_name == "multimodal_agent":
+        # task_input here is the image PATH, not file contents
+        result = run_multimodal_agent(task_input, client)
+        return {"output": result["response"], "tokens_used": result["tokens_used"], "is_cloud": True}
+
+    else:
+        raise ValueError(f"Unknown agent: {agent_name}")
+    
+
 def main():
     print("\n" + "="*60)
-    print("  The Edge-Cloud Swarm — 5-Task Prototype")
-    print(f"  Scoring mode: {'DeepEval (GEval)' if config.USE_DEEPEVAL else 'Keyword heuristic'}")
+    print("  The Edge-Cloud Swarm — Benchmark Run")
+    print(f"  Local model : {config.LOCAL_MODEL}")
+    print(f"  Scoring     : {'DeepEval' if config.USE_DEEPEVAL else 'heuristic'}")
+    print(f"  Escalation  : {'ON' if config.ENABLE_ESCALATION else 'OFF'}")
+    print(f"  Tasks       : {len(TASKS)}")
     print("="*60)
 
+    # ── API KEY ──────────────────────────────────────────────
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY not found. Add it to your .env file.")
-
     client = openai.OpenAI(api_key=api_key)
 
-    # ── STEP 1: PLAN ─────────────────────────────────────────
+    # ── STEP 1: CLOUD CEO PLANS DELEGATION ──────────────────
     print("\n[1/4] Cloud CEO planning task delegation...")
     plan_result = plan_tasks(TASKS, client)
     orchestration_tokens = plan_result["tokens_used"]
     for item in plan_result["plan"]:
-        print(f"      -> Task {item.get('task_id','?')} -> {item.get('agent','?')}: {item.get('reason','')}")
+        print(f"      -> {item.get('task_id','?')} -> {item.get('agent','?')}")
 
-    # ── STEP 2: LOAD INPUTS ─────────────────────────────────
-    with open("tasks/sample_log.txt") as f:
-        log_content = f.read()
-    with open("tasks/sample_document.txt") as f:
-        doc_content = f.read()
-
-    screenshot_path = "tasks/error_screenshot.png"
-    has_screenshot  = os.path.exists(screenshot_path)
-
-    # ── STEP 3: RUN AGENTS ──────────────────────────────────
-    print("\n[2/4] Running agents...")
+    # ── STEP 2: RUN EVERY TASK ──────────────────────────────
+    print(f"\n[2/4] Running {len(TASKS)} tasks...")
     results = []
 
-    # A1 — File Agent (LOCAL)
-    print("  A1 - File Agent (LOCAL)...")
-    r = TaskResult("A1", "A-File/Log", "file_agent [LOCAL]")
-    r.input_text = "Extract ERROR-level events from the server log and summarise the root cause."
-    r.start(); r.output = run_file_agent(log_content); r.stop()
-    r.finalise(use_deepeval=config.USE_DEEPEVAL)
-    handle_escalation(r, "Extract ERROR-level events from the server log and summarise the root cause.", log_content, client)
-    results.append(r)
+    for task in TASKS:
+        print(f"\n  {task['id']} — {task['category']} ({task['agent']})")
 
-    # B1 — Code Agent (LOCAL)
-    print("  B1 - Code Agent (LOCAL)...")
-    r = TaskResult("B1", "B-Code", "code_agent [LOCAL]")
-    r.input_text = "Write a Python function is_prime(n)."
-    r.start(); r.output = run_code_agent("Write a Python function called is_prime(n) that returns True if n is prime."); r.stop()
-    r.finalise(use_deepeval=config.USE_DEEPEVAL)
-    handle_escalation(r, "Write a Python function called is_prime(n) that returns True if n is prime.", "Write a Python function called is_prime(n) that returns True if n is prime.", client)
-    results.append(r)
+        # Create the result object and copy this task's scoring config onto it
+        r = TaskResult(task["id"], task["category"], task["agent"])
+        r.scoring_mode    = task["scoring_mode"]
+        r.criteria        = task.get("deeval_criteria")
+        r.expected_output = task.get("expected_output")
+        r.input_text      = task["description"]
 
-    # C1 — Planning Agent (LOCAL)
-    print("  C1 - Planning Agent (LOCAL)...")
-    r = TaskResult("C1", "C-Planning", "planning_agent [LOCAL]")
-    r.input_text = "Decompose: build a data pipeline that reads CSVs, cleans data, outputs a summary."
-    r.start(); r.output = run_planning_agent("Build a data pipeline that reads CSV files, cleans the data, and outputs a summary report."); r.stop()
-    r.finalise(use_deepeval=config.USE_DEEPEVAL)
-    handle_escalation(r, "Decompose into ordered subtasks: build a data pipeline that reads CSV files, cleans the data, and outputs a summary report.", "Build a data pipeline that reads CSV files, cleans the data, and outputs a summary report.", client)
-    results.append(r)
+        # Load the input; skip the task gracefully if a file is missing
+        try:
+            task_input = load_task_input(task)
+        except FileNotFoundError as e:
+            print(f"    [SKIP] Missing input file: {e.filename}")
+            r.output  = f"[SKIPPED] Missing input file: {e.filename}"
+            r.success = None
+            results.append(r)
+            continue
 
-    # D1 — Document Agent (LOCAL)
-    print("  D1 - Document Agent (LOCAL)...")
-    r = TaskResult("D1", "D-Document", "document_agent [LOCAL]")
-    r.input_text = "Summarise the edge computing document in 2-3 sentences."
-    r.start(); r.output = run_document_agent(doc_content); r.stop()
-    r.finalise(use_deepeval=config.USE_DEEPEVAL)
-    handle_escalation(r, "Summarise the provided document in 2-3 sentences.", doc_content, client)
-    results.append(r)
+        # Run the agent
+        r.start()
+        try:
+            agent_result = run_agent_for_task(task, task_input, client)
+            r.output = agent_result["output"]
+            # Cloud agents (multimodal) cost tokens — record them
+            if agent_result["is_cloud"]:
+                r.record_cloud_call(agent_result["tokens_used"],
+                                    str(task_input),
+                                    model=config.CLOUD_VISION_MODEL)
+        except Exception as e:
+            print(f"    [ERROR] Agent failed: {e}")
+            r.output = ""
+        r.stop()
 
-    # E1 — Multimodal Agent (CLOUD)
-    print("  E1 - Multimodal Agent (CLOUD)...")
-    r = TaskResult("E1", "E-Multimodal", "multimodal_agent [CLOUD]")
-    r.input_text = "Analyse the screenshot and describe the error, then suggest a fix."
-    r.start()
-    if has_screenshot:
-        e1 = run_multimodal_agent(screenshot_path, client)
-        r.output = e1["response"]
-        r.record_cloud_call(e1["tokens_used"], "image_task", model="gpt-4o")
+        # Score it
         r.finalise(use_deepeval=config.USE_DEEPEVAL)
-    else:
-        r.output = "[SKIPPED] No screenshot at tasks/error_screenshot.png. Add any screenshot to test this task."
-        r.success = None
-    r.stop()
-    results.append(r)
 
-    # ── STEP 4: SYNTHESIZE ──────────────────────────────────
+        # Escalate if needed — but only for LOCAL tasks.
+        # Cloud tasks (multimodal) are already on the cloud, nothing to escalate to.
+        if task["agent"] != "multimodal_agent":
+            handle_escalation(r, task["description"], str(task_input), client)
+
+        results.append(r)
+
+    # ── STEP 3: CLOUD CEO SYNTHESIZES ───────────────────────
     print("\n[3/4] Cloud CEO synthesizing final results...")
     synthesis_input = [
         {"task_id": r.task_id, "agent": r.agent, "output": r.output}
@@ -200,24 +259,23 @@ def main():
     synthesis = synthesize_results(synthesis_input, client)
     orchestration_tokens += synthesis["tokens_used"]
 
-    # ── OUTPUTS ─────────────────────────────────────────────
+    # ── STEP 4: OUTPUT ──────────────────────────────────────
     print("\n[4/4] Agent Outputs:")
     print("-"*60)
     for r in results:
         print(f"\n  [{r.task_id}] {r.category}  ({r.agent})")
-        print(f"  {r.output[:400]}{'...' if len(r.output) > 400 else ''}")
+        print(f"  {r.output[:300]}{'...' if len(r.output) > 300 else ''}")
 
     print("\n  FINAL SYNTHESIS (Cloud CEO):")
     print("-"*60)
     print(synthesis["summary"])
 
-    # Calculate the orchestrator's own cost (planning + synthesis)
     orchestration_cost = calculate_cost(orchestration_tokens, config.CLOUD_ORCHESTRATOR_MODEL)
-    print(f"\n  Orchestration overhead: {orchestration_tokens} tokens  =  ${orchestration_cost:.6f}")
-    print(f"  (This is the cost of the cloud CEO planning and synthesis, separate from per-task costs)")
+    print(f"\n  Orchestration overhead: {orchestration_tokens} tokens = ${orchestration_cost:.6f}")
 
     print_results_table(results)
     save_results_csv(results, model_name=config.LOCAL_MODEL)
+
 
 
 if __name__ == "__main__":

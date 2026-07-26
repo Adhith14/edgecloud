@@ -92,6 +92,10 @@ class TaskResult:
         self.escalated       = False   # True if this task was escalated to cloud
         self.local_score     = None    # the local model's score before escalation
         self.local_output    = ""      # what the local agent produced (kept for the record)
+    
+        self.scoring_mode    = "expected"
+        self.criteria        = None
+        self.expected_output = None
 
     def start(self):
         self.start_time = time.time()
@@ -107,29 +111,36 @@ class TaskResult:
 
     def finalise(self, use_deepeval=False):
         """
-        Scores the output.
-        - B1 always uses code execution.
-        - Others use DeepEval (if use_deepeval=True) else heuristic.
+        Scores the output according to this task's scoring_mode:
+          "execution"     -> run the code, pass if it works
+          "expected"      -> GEval against a reference answer
+          "criteria_only" -> GEval against criteria alone (ambiguous tasks)
         """
-        if self.task_id == "B1":
+        # Code tasks: run the code, no LLM judge needed
+        if self.scoring_mode == "execution":
             self.success, self.score_method = check_code_execution(self.output)
             return
 
+        # Everything else uses DeepEval, if it's switched on
         if use_deepeval:
-            # Import here so the project still runs even if deepeval
-            # isn't installed (for the heuristic-only mode).
             from deepeval_scorer import score_with_deepeval
-            result = score_with_deepeval(self.task_id, self.input_text, self.output)
+            result = score_with_deepeval(
+                task_id=self.task_id,
+                task_input=self.input_text,
+                agent_output=self.output,
+                criteria=self.criteria,
+                expected_output=self.expected_output,
+                scoring_mode=self.scoring_mode
+            )
             if result["score"] is not None:
                 self.score        = result["score"]
                 self.success      = result["passed"]
                 self.reason       = result["reason"]
                 self.score_method = f"DeepEval GEval ({result['score']})"
                 return
-            # fall through to heuristic if no config
 
+        # Fallback if DeepEval is off or no criteria were defined
         self.success, self.score_method = check_success_heuristic(self.task_id, self.output)
-
 
 def print_results_table(results):
     """Prints the evaluation table — this is what you show the supervisor."""

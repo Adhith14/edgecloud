@@ -1,123 +1,87 @@
 # ============================================================
 # deepeval_scorer.py — DeepEval Integration (GEval)
 # ============================================================
-# This module wires DeepEval's GEval metric into the pipeline,
-# replacing the simple keyword-heuristic scoring with real
-# LLM-as-judge scoring.
+# Scores an agent's output using DeepEval's GEval metric.
 #
-# HOW GEval WORKS:
-#   1. You define a natural-language CRITERIA (what "good" means)
-#   2. You give it the actual_output (what the agent produced)
-#      and an expected_output (a reference "ideal" answer)
-#   3. GEval uses an LLM judge (gpt-4o-mini here) to score how
-#      well actual_output meets the criteria, from 0.0 to 1.0
-#   4. score >= threshold (0.5) = PASS. It also returns a REASON.
+# Criteria and expected outputs are NO LONGER hardcoded here —
+# they come from the task definition in benchmark.py. This file
+# just applies whichever scoring mode the task asks for.
 #
-# Needs OPENAI_API_KEY as an environment variable, because GEval
-# itself calls an LLM to do the judging.
+# SCORING MODES:
+#   "expected"      -> judge actual_output against expected_output
+#   "criteria_only" -> judge actual_output against criteria alone
+#                      (for ambiguous tasks with no single right answer)
+#   "execution"     -> handled in evaluator.py, not here
 # ============================================================
 
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from deepeval.metrics import GEval
 from config import DEEPEVAL_MODEL, PASS_THRESHOLD
 
-# One judging config per task. "criteria" tells the judge what to
-# look for; "expected_output" is the reference ideal answer.
-TASK_EVAL_CONFIG = {
-    "A1": {
-        "criteria": (
-            "Determine whether the actual output correctly identifies the "
-            "ERROR-level log lines from the server log and gives a sensible "
-            "one-sentence root cause summary. It should mention the cache "
-            "connection failure and/or the payment processing timeout, since "
-            "those are the real errors in the log."
-        ),
-        "expected_output": (
-            "The errors found are: cache service connection failure after 3 "
-            "retries, a NullPointerException in OrderService.processOrder(), and "
-            "a payment processing timeout for order_id=9921. The root cause "
-            "appears to be cascading failures starting with the cache outage."
-        )
-    },
-    "C1": {
-        "criteria": (
-            "Determine whether the actual output decomposes the goal into "
-            "logical, ordered subtasks that would achieve building a data "
-            "pipeline that reads CSVs, cleans data, and outputs a summary. "
-            "Steps should include reading/loading data, cleaning/validating it, "
-            "and producing a summary or report."
-        ),
-        "expected_output": (
-            "1. Read CSV files into a data structure. 2. Validate and clean the "
-            "data. 3. Perform aggregation or analysis. 4. Generate a summary "
-            "report. 5. Output or save the report."
-        )
-    },
-    "D1": {
-        "criteria": (
-            "Determine whether the actual output is a faithful, concise 2-3 "
-            "sentence summary of the document about edge computing. It should "
-            "mention that edge computing processes data locally, and reference "
-            "at least one benefit (privacy or reduced latency) or one challenge "
-            "(limited local compute resources)."
-        ),
-        "expected_output": (
-            "Edge computing processes data locally on devices rather than "
-            "sending it to the cloud, reducing latency and protecting privacy. "
-            "However, local devices have limited compute resources, restricting "
-            "the size of models that can run there."
-        )
-    },
-    "E1": {
-        "criteria": (
-            "Determine whether the actual output correctly identifies that the "
-            "image shows an error or issue, and gives a plausible, specific fix. "
-            "Vague answers that do not engage with details in the image should "
-            "score lower."
-        ),
-        "expected_output": (
-            "The output should name the specific error or problem visible in the "
-            "screenshot and suggest a concrete, relevant fix."
-        )
-    },
-}
 
-
-def score_with_deepeval(task_id: str, agent_input: str, agent_output: str) -> dict:
+def score_with_deepeval(task_id, task_input, agent_output, criteria,
+                        expected_output=None, scoring_mode="expected"):
     """
-    Scores one task's output using DeepEval's GEval metric.
+    Scores one task output with GEval.
 
-    Returns dict with: score (0-1 float), passed (bool), reason (str).
-    Code tasks (B1) are NOT scored here — they use direct execution
-    in evaluator.py, which is more reliable than an LLM judge.
+    Args:
+        task_id:        e.g. "A1" (used only for naming the metric)
+        task_input:     what was given to the agent
+        agent_output:   what the agent produced
+        criteria:       natural-language description of what "good" looks like
+        expected_output: reference answer (only used in "expected" mode)
+        scoring_mode:   "expected" or "criteria_only"
+
+    Returns:
+        dict with score (0-1), passed (bool), reason (str)
     """
-    config = TASK_EVAL_CONFIG.get(task_id)
-    if not config:
+
+    # No criteria defined = nothing to judge against
+    if not criteria:
         return {"score": None, "passed": None,
-                "reason": "No GEval config for this task (e.g. code task uses execution)."}
+                "reason": "No GEval criteria defined for this task."}
 
-    correctness_metric = GEval(
-        name=f"Correctness-{task_id}",
-        criteria=config["criteria"],
-        evaluation_params=[
+    # Guard: GEval errors on empty output, so catch it early
+    if not agent_output or not agent_output.strip():
+        return {"score": 0.0, "passed": False,
+                "reason": "Agent produced no output."}
+
+    # Which fields the judge is allowed to look at.
+    # In criteria_only mode we deliberately EXCLUDE expected_output,
+    # because ambiguous tasks have no single correct answer.
+    if scoring_mode == "criteria_only":
+        eval_params = [
+            LLMTestCaseParams.INPUT,
+            LLMTestCaseParams.ACTUAL_OUTPUT,
+        ]
+        test_case = LLMTestCase(
+            input=task_input,
+            actual_output=agent_output
+        )
+    else:  # "expected" mode
+        eval_params = [
             LLMTestCaseParams.INPUT,
             LLMTestCaseParams.ACTUAL_OUTPUT,
             LLMTestCaseParams.EXPECTED_OUTPUT,
-        ],
+        ]
+        test_case = LLMTestCase(
+            input=task_input,
+            actual_output=agent_output,
+            expected_output=expected_output
+        )
+
+    metric = GEval(
+        name=f"Correctness-{task_id}",
+        criteria=criteria,
+        evaluation_params=eval_params,
         model=DEEPEVAL_MODEL,
         threshold=PASS_THRESHOLD
     )
 
-    test_case = LLMTestCase(
-        input=agent_input,
-        actual_output=agent_output,
-        expected_output=config["expected_output"]
-    )
-
-    correctness_metric.measure(test_case)
+    metric.measure(test_case)
 
     return {
-        "score": round(correctness_metric.score, 3),
-        "passed": correctness_metric.score >= correctness_metric.threshold,
-        "reason": correctness_metric.reason
+        "score": round(metric.score, 3),
+        "passed": metric.score >= metric.threshold,
+        "reason": metric.reason
     }
