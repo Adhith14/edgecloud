@@ -31,18 +31,19 @@ Here are the tasks to delegate:
 {task_list}
 
 Respond ONLY with a valid JSON array. No explanation. No markdown.
-Each item must have: task_id, agent, reason (one sentence).
+Each item must have exactly two fields: task_id, agent. No reason field.
 
 Example format:
+Example format:
 [
-  {{"task_id": "A1", "agent": "file_agent", "reason": "This is a log analysis task."}},
-  {{"task_id": "B1", "agent": "code_agent", "reason": "This requires code generation."}}
+  {{"task_id": "A1", "agent": "file_agent"}},
+  {{"task_id": "B1", "agent": "code_agent"}}
 ]"""
 
     response = client.chat.completions.create(
         model=CLOUD_ORCHESTRATOR_MODEL,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=500,
+        max_tokens=2000,
         temperature=CLOUD_TEMPERATURE
     )
 

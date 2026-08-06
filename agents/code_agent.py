@@ -11,13 +11,13 @@ from config import OLLAMA_URL, LOCAL_MODEL, LOCAL_TIMEOUT
 
 def run(task_description: str) -> str:
     """Generates Python code from a plain-English task description."""
-    prompt = f"""You are a Python code generation specialist.
-Write clean, working Python code for the following task.
-Return ONLY the Python code, no explanations, no markdown.
+    prompt = f"""You are a code generation specialist.
+Write clean, working code for the following task.
+Return ONLY the code, no explanations, no markdown.
 
 TASK: {task_description}
 
-Python code:"""
+Code:"""
 
     response = requests.post(
         OLLAMA_URL,

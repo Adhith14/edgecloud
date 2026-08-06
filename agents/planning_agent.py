@@ -8,17 +8,16 @@
 import requests
 from config import OLLAMA_URL, LOCAL_MODEL, LOCAL_TIMEOUT
 
+def run(task_description: str, context: str) -> str:
+    """Generic planning specialist — the task tells it what to do."""
+    prompt = f"""You are a planning and task decomposition specialist.
 
-def run(goal: str) -> str:
-    """Decomposes a high-level goal into a numbered list of subtasks."""
-    prompt = f"""You are a software project planning specialist.
-Break down the following high-level goal into a clear, ordered list of subtasks.
-Number each subtask. Be specific and practical.
-Keep each subtask to one sentence.
+TASK: {task_description}
 
-GOAL: {goal}
+CONTEXT:
+{context}
 
-SUBTASKS:"""
+Produce a clear, numbered, practical response to the task."""
 
     response = requests.post(
         OLLAMA_URL,

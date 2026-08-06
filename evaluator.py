@@ -223,7 +223,7 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
             writer.writerow([
                 "run_time", "system", "model", "task_id", "category", "agent",
                 "success", "score", "escalated", "local_score", "latency_s", "cloud_calls",
-                "cost_usd", "data_kb", "score_method"
+                "cost_usd", "data_kb", "score_method", "judge_reason"
             ])
 
         # Write one row per task
@@ -243,7 +243,8 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
                 r.cloud_calls,
                 round(r.cost_usd, 6),
                 round(r.data_kb, 3),
-                r.score_method
+                r.score_method,
+                (r.reason or "").replace("\n", " ")[:500]
             ])
 
     print(f"\n  Results saved to {filepath}")

@@ -32,6 +32,7 @@ from evaluator import TaskResult, print_results_table, save_results_csv
 from escalation import escalate_to_cloud
 from evaluator import calculate_cost
 from benchmark import TASKS
+from cloud_agent import run as run_cloud_agent
 
 
 def handle_escalation(r, task_description, task_input, client):
@@ -82,7 +83,8 @@ def handle_escalation(r, task_description, task_input, client):
         r.local_score  = r.score
 
         # Send the task to the cloud for a better answer
-        cloud_result = escalate_to_cloud(task_description, task_input, client)
+        is_code = (r.scoring_mode == "execution")
+        cloud_result = escalate_to_cloud(task_description, task_input, client, is_code_task=is_code)
 
         # Replace the output with the cloud's answer
         r.output = cloud_result["output"]
@@ -154,20 +156,28 @@ def run_agent_for_task(task, task_input, client):
           "tokens_used" - cloud tokens consumed (0 for local agents)
           "is_cloud"    - True if this agent ran in the cloud
     """
+    # CLOUD-ONLY MODE: bypass all local agents, send everything to the cloud.
+    # Exception: multimodal tasks already use the cloud vision model, so they
+    # follow their normal path below.
+    if config.SYSTEM_MODE == "cloud_only" and task["agent"] != "multimodal_agent":
+        is_code = task.get("scoring_mode") == "execution"
+        result = run_cloud_agent(task["description"], task_input, client, is_code_task=is_code)
+        return {"output": result["output"], "tokens_used": result["tokens_used"], "is_cloud": True}
+    
     agent_name = task["agent"]
 
     # ── LOCAL AGENTS (Ollama — no cloud cost) ───────────────
     if agent_name == "file_agent":
-        return {"output": run_file_agent(task_input), "tokens_used": 0, "is_cloud": False}
-
+        return {"output": run_file_agent(task["description"], task_input), "tokens_used": 0, "is_cloud": False}
+    
     elif agent_name == "code_agent":
         return {"output": run_code_agent(task["description"]), "tokens_used": 0, "is_cloud": False}
 
     elif agent_name == "planning_agent":
-        return {"output": run_planning_agent(task_input), "tokens_used": 0, "is_cloud": False}
+        return {"output": run_planning_agent(task["description"], task_input), "tokens_used": 0, "is_cloud": False}
 
     elif agent_name == "document_agent":
-        return {"output": run_document_agent(task_input), "tokens_used": 0, "is_cloud": False}
+        return {"output": run_document_agent(task["description"], task_input), "tokens_used": 0, "is_cloud": False}
 
     # ── CLOUD AGENT (vision — local SLMs can't do images) ───
     elif agent_name == "multimodal_agent":
@@ -183,6 +193,7 @@ def main():
     print("\n" + "="*60)
     print("  The Edge-Cloud Swarm — Benchmark Run")
     print(f"  Local model : {config.LOCAL_MODEL}")
+    print(f"  System mode : {config.SYSTEM_MODE}")
     print(f"  Scoring     : {'DeepEval' if config.USE_DEEPEVAL else 'heuristic'}")
     print(f"  Escalation  : {'ON' if config.ENABLE_ESCALATION else 'OFF'}")
     print(f"  Tasks       : {len(TASKS)}")
@@ -274,8 +285,10 @@ def main():
     print(f"\n  Orchestration overhead: {orchestration_tokens} tokens = ${orchestration_cost:.6f}")
 
     print_results_table(results)
-    save_results_csv(results, model_name=config.LOCAL_MODEL)
-
+    
+    # In cloud_only mode the "local model" is irrelevant — record the cloud model instead
+    model_label = config.CLOUD_ONLY_MODEL if config.SYSTEM_MODE == "cloud_only" else config.LOCAL_MODEL
+    save_results_csv(results, model_name=model_label, system_name=config.SYSTEM_MODE)
 
 
 if __name__ == "__main__":

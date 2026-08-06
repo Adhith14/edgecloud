@@ -9,22 +9,16 @@ import requests
 from config import OLLAMA_URL, LOCAL_MODEL, LOCAL_TIMEOUT
 
 
-def run(log_content: str) -> str:
-    """Reads log content, extracts ERROR-level lines, summarises root cause."""
-    prompt = f"""You are a log analysis specialist.
-Read the following server log and extract ONLY the ERROR-level lines.
-For each error, state the timestamp and what went wrong.
-Then in one sentence summarise the main issue.
+def run(task_description: str, content: str) -> str:
+    """Generic file/log specialist — the task tells it what to do."""
+    prompt = f"""You are a file and log analysis specialist.
 
-LOG:
-{log_content}
+TASK: {task_description}
 
-Respond in this format:
-ERRORS FOUND:
-- [timestamp]: [what went wrong]
+INPUT:
+{content}
 
-ROOT CAUSE SUMMARY:
-[one sentence]"""
+Complete the task accurately using only the input above."""
 
     response = requests.post(
         OLLAMA_URL,

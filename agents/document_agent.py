@@ -9,16 +9,16 @@ import requests
 from config import OLLAMA_URL, LOCAL_MODEL, LOCAL_TIMEOUT
 
 
-def run(document_content: str) -> str:
-    """Summarises a document's text content in 2-3 sentences."""
-    prompt = f"""You are a document summarisation specialist.
-Read the following document and write a clear summary in exactly 2-3 sentences.
-Cover the main point, one key detail, and the core challenge or conclusion.
+def run(task_description: str, content: str) -> str:
+    """Generic document specialist — the task tells it what to do."""
+    prompt = f"""You are a document processing specialist.
+
+TASK: {task_description}
 
 DOCUMENT:
-{document_content}
+{content}
 
-SUMMARY:"""
+Complete the task accurately using only the document above."""
 
     response = requests.post(
         OLLAMA_URL,
