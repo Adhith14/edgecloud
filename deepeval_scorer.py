@@ -39,12 +39,14 @@ def score_with_deepeval(task_id, task_input, agent_output, criteria,
     # No criteria defined = nothing to judge against
     if not criteria:
         return {"score": None, "passed": None,
-                "reason": "No GEval criteria defined for this task."}
+                "reason": "No GEval criteria defined for this task.",
+                "judge_cost_usd": 0.0, "judge_tokens": 0}
 
     # Guard: GEval errors on empty output, so catch it early
     if not agent_output or not agent_output.strip():
         return {"score": 0.0, "passed": False,
-                "reason": "Agent produced no output."}
+                "reason": "Agent produced no output.",
+                "judge_cost_usd": 0.0, "judge_tokens": 0}
 
     # Which fields the judge is allowed to look at.
     # In criteria_only mode we deliberately EXCLUDE expected_output,
@@ -79,9 +81,23 @@ def score_with_deepeval(task_id, task_input, agent_output, criteria,
     )
 
     metric.measure(test_case)
+    # Capture the judge's own cost and tokens so evaluation overhead can be
+    # reported separately from the system's operational cost.
+    judge_cost   = getattr(metric, "evaluation_cost", 0.0) or 0.0
+    judge_in     = getattr(metric, "input_tokens", 0) or 0
+    judge_out    = getattr(metric, "output_tokens", 0) or 0
+    # Capture the judge's own token usage so evaluation cost can be
+    # reported separately from system cost.
+    judge_tokens = 0
+    try:
+        judge_tokens = getattr(metric, "evaluation_cost", 0) or 0
+    except Exception:
+        judge_tokens = 0
 
     return {
         "score": round(metric.score, 3),
         "passed": metric.score >= metric.threshold,
-        "reason": metric.reason
+        "reason": metric.reason,
+        "judge_cost_usd": round(judge_cost, 8),
+        "judge_tokens": judge_in + judge_out
     }

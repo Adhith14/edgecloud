@@ -16,8 +16,19 @@ def encode_image(image_path: str) -> str:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def run(image_path: str, client: openai.OpenAI) -> dict:
-    """Sends an image to GPT-4o and asks it to identify the issue shown."""
+def run(image_path: str, client: openai.OpenAI, task_description: str = None) -> dict:
+    """
+    Sends an image to the cloud vision model with a task instruction.
+
+    Args:
+        image_path:       path to the image file
+        client:           initialised OpenAI client
+        task_description: what to do with the image. If omitted, falls back
+                          to a generic description request.
+
+    Returns:
+        dict with 'response' text and 'tokens_used'
+    """
     base64_image = encode_image(image_path)
     ext = image_path.split(".")[-1].lower()
     mime_type = f"image/{ext}" if ext != "jpg" else "image/jpeg"
@@ -30,7 +41,7 @@ def run(image_path: str, client: openai.OpenAI) -> dict:
                 "content": [
                     {
                         "type": "text",
-                        "text": "This is a screenshot. Identify any errors or issues shown. Describe what is wrong and suggest a fix in 2-3 sentences."
+                        "text": task_description or "Describe this image and identify anything notable or incorrect in it."
                     },
                     {
                         "type": "image_url",
@@ -39,8 +50,13 @@ def run(image_path: str, client: openai.OpenAI) -> dict:
                 ]
             }
         ],
-        max_tokens=300
+        max_tokens=600
     )
+
+    return {
+        "response": response.choices[0].message.content.strip(),
+        "tokens_used": response.usage.total_tokens
+    }
 
     return {
         "response": response.choices[0].message.content.strip(),

@@ -13,6 +13,7 @@
 
 import openai
 from config import CLOUD_ESCALATION_MODEL, CLOUD_TEMPERATURE
+from agents.multimodal_agent import run as run_cloud_vision
 
 
 def _strip_code_fences(text: str) -> str:
@@ -39,7 +40,7 @@ def _strip_code_fences(text: str) -> str:
 
 
 def escalate_to_cloud(task_description: str, task_input: str, client: openai.OpenAI,
-                      is_code_task: bool = False) -> dict:
+                      is_code_task: bool = False, is_vision_task: bool = False) -> dict:
     """
     Sends a task that the local agent handled poorly to the cloud
     model for a stronger answer.
@@ -54,6 +55,18 @@ def escalate_to_cloud(task_description: str, task_input: str, client: openai.Ope
     Returns:
         dict with 'output' (the cloud's answer) and 'tokens_used'
     """
+    
+    # Vision tasks cannot escalate through the text model — it would only
+    # receive the image path as a string. Route to the cloud vision model
+    # with the actual image instead.
+    if is_vision_task:
+        result = run_cloud_vision(task_input, client, task_description)
+        return {
+            "output": result["response"],
+            "tokens_used": result["tokens_used"]
+        }
+    
+    
 
     # Extra instruction so code tasks come back runnable, not prose-wrapped
     code_note = (

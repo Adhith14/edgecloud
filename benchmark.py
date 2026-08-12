@@ -450,14 +450,131 @@ TASKS = [
         "input_ref": "tasks/error_screenshot.png",
         "scoring_mode": "expected",
         "deeval_criteria": (
-            "Determine whether the actual output correctly identifies the error or "
-            "issue in the image and suggests a plausible, specific fix."
+            "Determine whether the output identifies the SPECIFIC error shown in the image "
+            "(naming the failing command and why it failed) and suggests a concrete fix. "
+            "Generic troubleshooting advice that does not name the actual error, or that "
+            "could apply to any screenshot, should score low regardless of how well written it is."
         ),
         "expected_output": (
-            "The output should name the specific error visible in the screenshot and "
-            "suggest a concrete, relevant fix."
+            "The screenshot shows a PowerShell error: the command 'la' is not recognised as a "
+            "cmdlet, function, or operable program. 'la' is a Unix alias for 'ls -a' and does not "
+            "exist in PowerShell. Fix: use 'ls' or 'Get-ChildItem -Force', or define an alias with "
+            "Set-Alias la Get-ChildItem."
         ),
     },
+    {
+        "id": "E2",
+        "category": "E - Multimodal",
+        "agent": "multimodal_agent",
+        "description": "Read this bar chart. State which expense category has the single highest bar and which economical class it belongs to, state which class spends the most on housing, and describe in one sentence how spending patterns differ between the classes.",
+        "input_type": "image",
+        "input_ref": "tasks/chart.png",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "Determine whether the output correctly reads the grouped bar chart: that the tallest "
+            "bar is Rich spending on Food (~5500 GBP), that the Poor class spends the most on "
+            "Housing (~4000 GBP), and that it describes the inverted pattern — poorer classes spend "
+            "proportionally more on housing while the rich class spends far more on food. Values "
+            "within roughly 500 GBP are acceptable. Naming the wrong category or class, or inventing "
+            "values not in the chart, should score low."
+        ),
+        "expected_output": (
+            "Determine whether the output correctly reads the grouped bar chart: that the tallest "
+            "bar is Rich spending on Food, and that the Poor class spends the most on Housing. "
+            "Correctly identifying these two facts is the primary requirement. Stating approximate "
+            "values and describing the comparative pattern between classes are secondary and should "
+            "add to the score but their absence should not fail an otherwise correct reading. "
+            "Naming the wrong category or class, or inventing values not in the chart, should score low."
+        ),
+    },
+    {
+        "id": "E3",
+        "category": "E - Multimodal",
+        "agent": "multimodal_agent",
+        "description": "Describe the system architecture shown in this diagram. It compares two builds. List the components of each build and explain what differs between them.",
+        "input_type": "image",
+        "input_ref": "tasks/diagram.png",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "Determine whether the output identifies that the diagram compares two builds (v1 "
+            "current and v2 target), names the shared three-layer structure (Cloud CEO at top, an "
+            "agent swarm in the middle, an evaluation layer at the bottom), and correctly states "
+            "the key differences in v2: specialist models per agent rather than one shared model, "
+            "a shared tool layer, and links between agents. Describing only one side, or missing "
+            "the comparison entirely, should score low."
+        ),
+        "expected_output": (
+            "The diagram compares two builds side by side. Both share a three-layer structure: a "
+            "Cloud CEO at the top that plans and delegates, an agent swarm in the middle, and an "
+            "evaluation layer at the bottom. In v1 (current build) the local swarm has four agents "
+            "— file, code, planning, and document — all sharing one model (qwen2.5:3b), with no "
+            "tools and agents running in isolation, feeding into DeepEval plus escalation. In v2 "
+            "(target build) the specialist swarm assigns a different model to each role (qwen2.5-coder "
+            "for code, llama3.2:3b for file, qwen2.5:3b for docs, gpt-4o in the cloud for vision), "
+            "adds a shared tool layer providing read_file, run_code and search, connects the agents "
+            "to each other, and feeds an evaluation and experiment layer supporting sweeps, graphs "
+            "and trade-offs."
+        ),
+    },
+    {
+        "id": "E4",
+        "category": "E - Multimodal",
+        "agent": "multimodal_agent",
+        "description": "Extract the table in this image into CSV format. Include the header row. Return ONLY the CSV, no commentary.",
+        "input_type": "image",
+        "input_ref": "tasks/data_table.png",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "Determine whether the output is valid CSV whose headers and cell values match the "
+            "spreadsheet in the image: seven columns (StudentID, First name, Last name, Math, "
+            "Phonics, Science, Attendance) and ten student rows. Score proportionally to accuracy — "
+            "missing rows, transposed columns, misread numbers, or commentary wrapped around the "
+            "CSV should reduce the score."
+        ),
+        "expected_output": (
+            "StudentID,First name,Last name,Math,Phonics,Science,Attendance\n"
+            "1,Jessica,Brookins,85,96,76,210\n"
+            "2,Matt,Nama,80,54,95,215\n"
+            "3,Betty,Chu,90,67,94,200\n"
+            "4,Cara,Mina,75,82,34,180\n"
+            "5,Jen,Caro,78,56,56,218\n"
+            "6,Lisa,Pedro,91,78,73,218\n"
+            "7,Jin,Liu,63,90,89,210\n"
+            "8,Molly,Vans,78,82,56,205\n"
+            "9,Samatha,Summers,69,66,87,180\n"
+            "10,Jake,Crane,95,72,67,210"
+        ),
+    },
+    {
+        "id": "E5",
+        "category": "E - Multimodal",
+        "agent": "multimodal_agent",
+        "description": "This screenshot shows Python source code and an error traceback together. Identify the exception type, state which line of the visible code raises it, explain the true underlying cause, and give the corrected code.",
+        "input_type": "image",
+        "input_ref": "tasks/complex_error.png",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "This task requires combining two regions of the image, not just reading text. "
+            "Determine whether the output (a) names KeyError: 'q4' as the exception, (b) notes it "
+            "is raised at line 15 in quarter_total, and crucially (c) identifies that the real "
+            "cause is line 9 of SALES_DATA where the 'west' region is missing its q4 entry while "
+            "all other regions have four quarters, and (d) gives a valid fix. An answer that only "
+            "reads the traceback and blames line 15 without tracing back to the missing data should "
+            "score low, as should generic debugging advice."
+        ),
+        "expected_output": (
+            "The exception is KeyError: 'q4', raised at line 15 in quarter_total where it executes "
+            "'return region_data[quarter]'. That line is not the actual fault. The real cause is in "
+            "the SALES_DATA dictionary at line 9: the 'west' region only defines q1, q2 and q3, "
+            "while north, south and east each define all four quarters. Since annual_total loops "
+            "over ['q1','q2','q3','q4'] for every region, the lookup fails when it reaches q4 for "
+            "west. The traceback confirms the call chain: build_report (line 31) calls annual_total "
+            "(line 23) which calls quarter_total (line 15). Fix: add the missing q4 value to the "
+            "west region, for example \"west\": {\"q1\": 8200, \"q2\": 9100, \"q3\": 8800, \"q4\": 9500}. "
+            "A more defensive fix would use region_data.get(quarter, 0) to tolerate missing quarters."
+        ),
+    },
+
 
     # ════════════════════════════════════════════════════════
     # CATEGORY F — Real-World Ambiguous Tasks

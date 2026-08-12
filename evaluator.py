@@ -19,6 +19,7 @@ from tabulate import tabulate
 import csv
 import os
 from datetime import datetime
+import config
 
 # ── OpenAI pricing (approx, gpt-4o-mini & gpt-4o, 2026) ──────
 GPT4O_MINI_INPUT_COST_PER_1K  = 0.000150
@@ -96,6 +97,11 @@ class TaskResult:
         self.scoring_mode    = "expected"
         self.criteria        = None
         self.expected_output = None
+        # Evaluation overhead — the judge's own cost, kept separate from
+        # system cost because the judge only exists in the lab, not in
+        # a real deployment.
+        self.judge_cost_usd  = 0.0
+        self.judge_tokens    = 0
 
     def start(self):
         self.start_time = time.time()
@@ -132,6 +138,13 @@ class TaskResult:
                 expected_output=self.expected_output,
                 scoring_mode=self.scoring_mode
             )
+            # Accumulate — a task scored twice (before and after escalation)
+
+            # incurs judge cost twice, so we add rather than overwrite.
+
+            self.judge_cost_usd += result.get("judge_cost_usd", 0.0)
+            self.judge_tokens   += result.get("judge_tokens", 0)
+            
             if result["score"] is not None:
                 self.score        = result["score"]
                 self.success      = result["passed"]
@@ -182,6 +195,8 @@ def print_results_table(results):
     print(f"  Average Latency      : {avg_lat}s per task")
     print(f"  Total Cloud API Calls: {total_calls}")
     print(f"  Total Estimated Cost : ${total_cost:.6f}")
+    total_eval_cost = sum(r.judge_cost_usd for r in results)
+    print(f"  Evaluation Overhead  : ${total_eval_cost:.6f}  (judge cost — lab only, not system cost)")
     print("="*100 + "\n")
 
     # Print DeepEval judge reasons separately (they're long)
@@ -221,9 +236,10 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
         # Write the header row only once (when the file is first created)
         if not file_exists:
             writer.writerow([
-                "run_time", "system", "model", "task_id", "category", "agent",
+                "run_time", "system", "model", "vision_model", "task_id", "category", "agent",
                 "success", "score", "escalated", "local_score", "latency_s", "cloud_calls",
-                "cost_usd", "data_kb", "score_method", "judge_reason"
+                "cost_usd", "eval_cost_usd", "eval_tokens",
+                "data_kb", "score_method", "judge_reason"
             ])
 
         # Write one row per task
@@ -232,6 +248,7 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
                 run_time,
                 system_name,
                 model_name,
+                config.LOCAL_VISION_MODEL,
                 r.task_id,
                 r.category,
                 r.agent,
@@ -242,9 +259,95 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
                 r.latency_s,
                 r.cloud_calls,
                 round(r.cost_usd, 6),
+                round(r.judge_cost_usd, 8),
+                r.judge_tokens,
                 round(r.data_kb, 3),
                 r.score_method,
                 (r.reason or "").replace("\n", " ")[:500]
             ])
 
     print(f"\n  Results saved to {filepath}")
+    
+    
+def save_run_summary(results, model_name, system_name, orchestration_tokens,
+
+                     orchestration_cost, filepath="results/runs.csv"):
+
+    """
+
+    Saves ONE row per benchmark run, capturing run-level metrics that
+
+    don't belong on individual tasks — chiefly the orchestrator's own
+
+    planning and synthesis cost, plus aggregate totals.
+
+    """
+
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    file_exists = os.path.isfile(filepath)
+
+    run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+
+    scored = [r for r in results if r.success is not None]
+
+    passed = sum(1 for r in scored if r.success)
+
+    escalated = sum(1 for r in results if r.escalated)
+
+
+
+    with open(filepath, "a", newline="", encoding="utf-8") as f:
+
+        writer = csv.writer(f)
+
+        if not file_exists:
+
+            writer.writerow([
+
+                "run_time", "system", "model", "tasks_total", "tasks_scored",
+
+                "tasks_passed", "success_rate_pct", "tasks_escalated",
+
+                "orchestration_tokens", "orchestration_cost_usd",
+
+                "task_cost_usd", "total_system_cost_usd",
+
+                "eval_cost_usd", "total_latency_s", "total_data_kb","vision_model"
+
+            ])
+
+
+
+        task_cost = sum(r.cost_usd for r in results)
+
+        writer.writerow([
+
+            run_time, system_name, model_name,
+
+            len(results), len(scored), passed,
+
+            round(passed / len(scored) * 100, 1) if scored else 0,
+
+            escalated,
+
+            orchestration_tokens,
+
+            round(orchestration_cost, 8),
+
+            round(task_cost, 8),
+
+            round(task_cost + orchestration_cost, 8),   # true system cost
+
+            round(sum(r.judge_cost_usd for r in results), 8),
+
+            round(sum(r.latency_s for r in results), 2),
+
+            round(sum(r.data_kb for r in results), 3),
+            config.LOCAL_VISION_MODEL,
+
+        ])
+
+    print(f"  Run summary saved to {filepath}")

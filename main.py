@@ -33,7 +33,8 @@ from escalation import escalate_to_cloud
 from evaluator import calculate_cost
 from benchmark import TASKS
 from cloud_agent import run as run_cloud_agent
-
+from evaluator import TaskResult, print_results_table, save_results_csv, save_run_summary, calculate_cost
+from agents.local_vision_agent import run as run_local_vision_agent
 
 def handle_escalation(r, task_description, task_input, client):
     """
@@ -83,15 +84,19 @@ def handle_escalation(r, task_description, task_input, client):
         r.local_score  = r.score
 
         # Send the task to the cloud for a better answer
-        is_code = (r.scoring_mode == "execution")
-        cloud_result = escalate_to_cloud(task_description, task_input, client, is_code_task=is_code)
+        is_code   = (r.scoring_mode == "execution")
+        is_vision = ("multimodal" in r.agent)
+        cloud_result = escalate_to_cloud(task_description, task_input, client,
+                                         is_code_task=is_code, is_vision_task=is_vision)
 
         # Replace the output with the cloud's answer
         r.output = cloud_result["output"]
 
-        # Record that this task was escalated, and log the cloud call
+        # Record that this task was escalated, and log the cloud call.
+        # Vision escalations use the vision model, which is priced differently.
         r.escalated = True
-        r.record_cloud_call(cloud_result["tokens_used"], task_input, model=config.CLOUD_ESCALATION_MODEL)
+        model_used = config.CLOUD_VISION_MODEL if is_vision else config.CLOUD_ESCALATION_MODEL
+        r.record_cloud_call(cloud_result["tokens_used"], task_input, model=model_used)
 
         # Re-score the new cloud output so the final score reflects the escalated answer
         r.finalise(use_deepeval=config.USE_DEEPEVAL)
@@ -179,11 +184,17 @@ def run_agent_for_task(task, task_input, client):
     elif agent_name == "document_agent":
         return {"output": run_document_agent(task["description"], task_input), "tokens_used": 0, "is_cloud": False}
 
-    # ── CLOUD AGENT (vision — local SLMs can't do images) ───
     elif agent_name == "multimodal_agent":
-        # task_input here is the image PATH, not file contents
-        result = run_multimodal_agent(task_input, client)
-        return {"output": result["response"], "tokens_used": result["tokens_used"], "is_cloud": True}
+        # task_input is the image PATH, not file contents.
+        # In cloud_only mode, or when local vision is disabled, use the
+        # cloud vision model. Otherwise attempt locally first — this is
+        # what allows Category E to stay on-device.
+        if config.SYSTEM_MODE == "cloud_only" or not config.USE_LOCAL_VISION:
+            result = run_multimodal_agent(task_input, client, task["description"])
+            return {"output": result["response"], "tokens_used": result["tokens_used"], "is_cloud": True}
+        else:
+            output = run_local_vision_agent(task["description"], task_input)
+            return {"output": output, "tokens_used": 0, "is_cloud": False}
 
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
@@ -255,8 +266,11 @@ def main():
         r.finalise(use_deepeval=config.USE_DEEPEVAL)
 
         # Escalate if needed — but only for LOCAL tasks.
-        # Cloud tasks (multimodal) are already on the cloud, nothing to escalate to.
-        if task["agent"] != "multimodal_agent":
+        # Vision tasks can now escalate too, since they may run locally first.
+        # Only skip when the task already ran on the cloud.
+        already_cloud = (task["agent"] == "multimodal_agent" and
+                         (config.SYSTEM_MODE == "cloud_only" or not config.USE_LOCAL_VISION))
+        if not already_cloud:
             handle_escalation(r, task["description"], str(task_input), client)
 
         results.append(r)
@@ -289,6 +303,12 @@ def main():
     # In cloud_only mode the "local model" is irrelevant — record the cloud model instead
     model_label = config.CLOUD_ONLY_MODEL if config.SYSTEM_MODE == "cloud_only" else config.LOCAL_MODEL
     save_results_csv(results, model_name=model_label, system_name=config.SYSTEM_MODE)
+    
+    save_run_summary(results,
+                     model_name=model_label,
+                     system_name=config.SYSTEM_MODE,
+                     orchestration_tokens=orchestration_tokens,
+                     orchestration_cost=orchestration_cost)
 
 
 if __name__ == "__main__":
