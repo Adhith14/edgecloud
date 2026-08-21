@@ -35,6 +35,7 @@ from benchmark import TASKS
 from cloud_agent import run as run_cloud_agent
 from evaluator import TaskResult, print_results_table, save_results_csv, save_run_summary, calculate_cost
 from agents.local_vision_agent import run as run_local_vision_agent
+import graph as v2_graph
 
 def handle_escalation(r, task_description, task_input, client):
     """
@@ -169,8 +170,68 @@ def run_agent_for_task(task, task_input, client):
         result = run_cloud_agent(task["description"], task_input, client, is_code_task=is_code)
         return {"output": result["output"], "tokens_used": result["tokens_used"], "is_cloud": True}
     
+     # V2 MODES: route through the LangGraph workflow instead of calling
+    # a single agent directly. The graph handles tool use and the local
+    # retry loop internally.
+     # V2 MODES: route through the LangGraph workflow instead of calling
+
+    # a single agent directly. The graph handles tool use and the local
+
+    # retry loop internally.
+
+    if config.SYSTEM_MODE in ("v2_local", "v2_hybrid"):
+        # Vision tasks bypass the graph — the vision agent has no tools
+        # and needs the image path passed directly.
+        if task["agent"] == "multimodal_agent":
+            output = run_local_vision_agent(task["description"], task_input)
+            return {"output": output, "tokens_used": 0, "is_cloud": False,
+                    "v2": {"iterations_used": 1, "tools_called": [],
+                           "models_used": [config.V2_SPECIALIST_MODELS["multimodal_agent"]]}}
+
+
+
+        # Name the input file(s) so the agent knows what to read, without
+        # giving it the contents — it must still call read_file itself.
+
+        desc = task["description"]
+        ref = task.get("input_ref")
+        if task["input_type"] in ("log", "document") and isinstance(ref, str):
+            fname = ref.split("/")[-1]
+            desc = f"{desc}\n\nThe relevant file is: {fname}"
+        elif task["input_type"] == "multi" and isinstance(ref, list):
+            names = ", ".join(r.split("/")[-1] for r in ref)
+            desc = f"{desc}\n\nThe relevant files are: {names}"
+        elif task["input_type"] == "text":
+            desc = f"{desc}\n\nCONTEXT:\n{ref}"
+
+        # result = v2_graph.run_task(task["id"], desc, task["agent"])
+        # return {"output": result["output"], "tokens_used": 0, "is_cloud": False,
+        #         "v2": result}
+        import signal
+
+        class _TaskTimeout(Exception):
+            pass
+
+        def _on_timeout(signum, frame):
+            raise _TaskTimeout()
+
+        signal.signal(signal.SIGALRM, _on_timeout)
+        signal.alarm(config.V2_TASK_TIMEOUT_S)
+        try:
+            result = v2_graph.run_task(task["id"], desc, task["agent"])
+        except _TaskTimeout:
+            result = {"output": "[TIMEOUT] Task exceeded time limit.",
+                      "iterations_used": 0, "tools_called": [],
+                      "models_used": [], "critic_passed": False}
+        finally:
+            signal.alarm(0)
+
+        return {"output": result["output"], "tokens_used": 0, "is_cloud": False,
+                "v2": result}
+    
     agent_name = task["agent"]
 
+    
     # ── LOCAL AGENTS (Ollama — no cloud cost) ───────────────
     if agent_name == "file_agent":
         return {"output": run_file_agent(task["description"], task_input), "tokens_used": 0, "is_cloud": False}
@@ -252,6 +313,13 @@ def main():
         try:
             agent_result = run_agent_for_task(task, task_input, client)
             r.output = agent_result["output"]
+            # Capture v2 metrics when the graph was used
+            v2 = agent_result.get("v2")
+            if v2:
+                r.iterations_used = v2.get("iterations_used", 0)
+                r.tools_called    = v2.get("tools_called", [])
+                r.models_used     = v2.get("models_used", [])
+                r.critic_passed   = v2.get("critic_passed")
             # Cloud agents (multimodal) cost tokens — record them
             if agent_result["is_cloud"]:
                 r.record_cloud_call(agent_result["tokens_used"],

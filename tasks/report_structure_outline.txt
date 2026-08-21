@@ -1,0 +1,11 @@
+### Overview
+During Q2 2026, the platform served an average of 4.2 million requests per day, up 18% from Q1.
+
+### Reliability
+Overall availability for the quarter was 99.87%, slightly below our 99.9% target. Two significant incidents occurred: a misconfigured load balancer rule caused elevated error rates for 47 minutes on 14 May 2026, and a database failover took longer than expected (22 minutes) during which write operations were degraded on 23 June 2026.
+
+### Cost Optimisation
+The team identified that approximately 23% of compute spend occurs on non-production environments left running outside working hours. An automated shutdown policy is scheduled for rollout in August 2026 and is projected to save £8,500 per quarter.
+
+### Outlook
+Q3 priorities are: completing the automated shutdown rollout, reducing database failover time below 5 minutes, and evaluating a move of the analytics pipeline to reserved capacity, which early estimates suggest could reduce its cost by 30%.

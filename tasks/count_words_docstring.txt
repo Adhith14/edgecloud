@@ -1,0 +1,14 @@
+def count_words(text):
+    """
+    Count the frequency of each word in a given text.
+
+    Parameters:
+        text (str): The input text to analyze.
+
+    Returns:
+        dict: A dictionary where keys are unique words and values are their frequencies.
+
+    Example:
+        >>> count_words('Hello, world!')
+        {'hello': 1, 'world': 1}
+    """

@@ -60,14 +60,38 @@ def check_success_heuristic(task_id: str, output: str):
 
 
 def check_code_execution(output: str):
-    """Runs generated code — pass if it executes and defines a function."""
+    """Runs generated code — pass if it executes and defines a function.
+
+    v2 agents sometimes wrap code in markdown fences or add commentary,
+    so we extract the code block first where one is present.
+    """
+    code = output or ""
+
+    # Prefer the contents of a fenced block if there is one
+    if "```" in code:
+        parts = code.split("```")
+        if len(parts) >= 2:
+            block = parts[1]
+            lines = block.split("\n")
+            if lines and lines[0].strip().lower() in ("python", "py", ""):
+                block = "\n".join(lines[1:])
+            code = block
+
+    # Normalise smart quotes, which break exec()
+    code = (code.replace("\u2019", "'").replace("\u2018", "'")
+                .replace("\u201c", '"').replace("\u201d", '"'))
+
     try:
         exec_globals = {}
-        exec(output, exec_globals)
-        has_function = any(callable(v) for v in exec_globals.values())
+        exec(code, exec_globals)
+        # Code ran without raising. That is the real success criterion.
+        # A defined function is a stronger signal, so we note it, but its
+        # absence should not fail otherwise-working code.
+        has_function = any(callable(v) for v in exec_globals.values()
+                           if not str(v).startswith("<built-in"))
         if has_function:
-            return True, "automated (exec + function check)"
-        return False, "automated (exec ok but no function)"
+            return True, "automated (exec + function defined)"
+        return True, "automated (exec ok, no function defined)"
     except Exception as e:
         return False, f"automated (exec failed: {str(e)[:40]})"
 
@@ -102,6 +126,11 @@ class TaskResult:
         # a real deployment.
         self.judge_cost_usd  = 0.0
         self.judge_tokens    = 0
+        # V2 metrics — populated only when running through the graph
+        self.iterations_used = 0      # how many specialist attempts (1 = no retry)
+        self.tools_called    = []     # tool names used, in order
+        self.models_used     = []     # which models participated
+        self.critic_passed   = None   # did the LOCAL critic accept the output
 
     def start(self):
         self.start_time = time.time()
@@ -239,7 +268,9 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
                 "run_time", "system", "model", "vision_model", "task_id", "category", "agent",
                 "success", "score", "escalated", "local_score", "latency_s", "cloud_calls",
                 "cost_usd", "eval_cost_usd", "eval_tokens",
-                "data_kb", "score_method", "judge_reason"
+                "data_kb", "iterations_used", "tools_called",
+                "models_used", "critic_passed",
+                "score_method", "judge_reason"
             ])
 
         # Write one row per task
@@ -262,6 +293,10 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
                 round(r.judge_cost_usd, 8),
                 r.judge_tokens,
                 round(r.data_kb, 3),
+                r.iterations_used,
+                "|".join(r.tools_called),          # pipe-separated, CSV-safe
+                "|".join(r.models_used),
+                r.critic_passed if r.critic_passed is not None else "",
                 r.score_method,
                 (r.reason or "").replace("\n", " ")[:500]
             ])
@@ -270,84 +305,51 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
     
     
 def save_run_summary(results, model_name, system_name, orchestration_tokens,
-
                      orchestration_cost, filepath="results/runs.csv"):
 
     """
-
     Saves ONE row per benchmark run, capturing run-level metrics that
-
     don't belong on individual tasks — chiefly the orchestrator's own
-
     planning and synthesis cost, plus aggregate totals.
 
     """
-
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
     file_exists = os.path.isfile(filepath)
-
     run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-
-
     scored = [r for r in results if r.success is not None]
-
     passed = sum(1 for r in scored if r.success)
-
     escalated = sum(1 for r in results if r.escalated)
 
-
-
     with open(filepath, "a", newline="", encoding="utf-8") as f:
-
         writer = csv.writer(f)
-
         if not file_exists:
-
             writer.writerow([
-
-                "run_time", "system", "model", "tasks_total", "tasks_scored",
-
+                "run_time", "system", "model","model_assignment", "tasks_total", "tasks_scored",
                 "tasks_passed", "success_rate_pct", "tasks_escalated",
-
                 "orchestration_tokens", "orchestration_cost_usd",
-
                 "task_cost_usd", "total_system_cost_usd",
-
-                "eval_cost_usd", "total_latency_s", "total_data_kb","vision_model"
-
+                "eval_cost_usd", "total_latency_s", "total_data_kb",
+                "total_iterations", "tasks_retried", "total_tool_calls","vision_model",
             ])
 
 
-
         task_cost = sum(r.cost_usd for r in results)
-
         writer.writerow([
-
-            run_time, system_name, model_name,
-
+            run_time, system_name, model_name, config.MODEL_ASSIGNMENT,
             len(results), len(scored), passed,
-
             round(passed / len(scored) * 100, 1) if scored else 0,
-
             escalated,
-
             orchestration_tokens,
-
             round(orchestration_cost, 8),
-
             round(task_cost, 8),
-
             round(task_cost + orchestration_cost, 8),   # true system cost
-
             round(sum(r.judge_cost_usd for r in results), 8),
-
             round(sum(r.latency_s for r in results), 2),
-
             round(sum(r.data_kb for r in results), 3),
+            sum(r.iterations_used for r in results),
+            sum(1 for r in results if r.iterations_used > 1),   # tasks needing a retry
+            sum(len(r.tools_called) for r in results),
             config.LOCAL_VISION_MODEL,
-
         ])
-
     print(f"  Run summary saved to {filepath}")

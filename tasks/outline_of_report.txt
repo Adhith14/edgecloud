@@ -1,0 +1,10 @@
+Quarterly Infrastructure Review — Q2 2026
+- Platform served an average of 4.2 million requests per day, up 18% from Q1.
+- Total infrastructure spend was £142,000, a 11% increase quarter-on-quarter due to increased cloud compute usage in the analytics pipeline.
+Reliability
+- Overall availability for the quarter was 99.87%, slightly below the target of 99.9%.
+- Two significant incidents occurred: misconfigured load balancer rule on 14 May and database failover on 23 June, both have completed post-mortems with remediation actions assigned.
+Cost Optimisation
+- Approximately 23% of compute spend occurs on non-production environments left running outside working hours; an automated shutdown policy is scheduled for August 2026 to save £8,500 per quarter.
+Outlook
+- Q3 priorities: complete the automated shutdown rollout, reduce database failover time below 5 minutes, and evaluate a move of the analytics pipeline to reserved capacity.

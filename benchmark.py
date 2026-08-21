@@ -128,7 +128,61 @@ TASKS = [
             '{"timestamp": "2026-06-18 08:19:55", "message": "Payment processing failed for order_id=9921: Timeout after 30s"}]'
         ),
     },
-    
+     {
+        "id": "A6",
+        "category": "A - File/Log Analysis",
+        "agent": "file_agent",
+        "description": "Analyse this metrics CSV. Identify any genuine anomaly that requires investigation, and explicitly state which apparent anomalies are benign and why. Give the underlying pattern, not just the outlier rows.",
+        "input_type": "log",
+        "input_ref": "tasks/hard_metrics.csv",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "This task contains a deliberate trap. Determine whether the output (a) correctly "
+            "dismisses the 02:30-02:45 CPU spike as benign because it is annotated as the nightly "
+            "backup window, and (b) identifies the REAL problem: a sustained correlated drift from "
+            "03:15 onward where memory climbs from 61 to 82 percent while error_rate rises from "
+            "0.02 to 0.19 and latency_p99 rises from 124 to 286 ms, consistent with a memory leak "
+            "degrading the service. An output that flags only the CPU spike, or lists rows without "
+            "identifying the correlated trend, should score low regardless of presentation quality."
+        ),
+        "expected_output": (
+            "The CPU spike at 02:30-02:45 (94% and 92%) is benign — it is annotated as the nightly "
+            "backup window and CPU returns to baseline immediately afterwards. The genuine anomaly "
+            "is a sustained degradation beginning around 03:15: memory rises monotonically from 61% "
+            "to 82%, error_rate climbs from 0.02 to 0.19, and p99 latency increases from 124ms to "
+            "286ms, while CPU stays flat at ~33%. The correlation of rising memory with rising "
+            "errors and latency, without CPU involvement, indicates a probable memory leak causing "
+            "progressive service degradation. This requires investigation; the backup spike does not."
+        ),
+    },
+    {
+        "id": "A7",
+        "category": "A - File/Log Analysis",
+        "agent": "file_agent",
+        "description": "This ETL log shows several job runs and one dashboard warning. Every job reports success. Determine whether there is actually a problem, and if so explain precisely what is failing and how you can tell.",
+        "input_type": "log",
+        "input_ref": "tasks/silent_failure.log",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "Determine whether the output identifies a silent failure: the ETL jobs report success "
+            "and record counts are rising (47,744 -> 47,981 -> 48,213), yet the dashboard shows the "
+            "customer count frozen at 44,102 for three days with its last successful refresh on "
+            "2026-07-29. The correct inference is that the ETL is writing successfully but the "
+            "downstream dashboard/warehouse consumer has not refreshed since 29 July, so the "
+            "pipeline is broken after the load stage despite all success messages. An output that "
+            "concludes there is no problem because all jobs succeeded should score very low."
+        ),
+        "expected_output": (
+            "Yes, there is a problem, and it is a silent failure. All three ETL runs report success "
+            "with rising record counts (47,744 on 30 July, 47,981 on 31 July, 48,213 on 1 August), "
+            "so extract, transform and load are all working. However the dashboard warns that the "
+            "customer count metric has been unchanged at 44,102 for three days, and its last "
+            "successful refresh was 2026-07-29. The mismatch between rising loaded counts and a "
+            "frozen reported figure shows the break is downstream of the load stage: the BI refresh "
+            "or the view the dashboard reads has been failing silently since 29 July. The ETL "
+            "success messages are misleading because they only cover the write, not the consumption."
+        ),
+    },
 
 
     # ════════════════════════════════════════════════════════
@@ -158,6 +212,7 @@ TASKS = [
             "    return total / len(nums)\n"
             "\n"
             "print(average([2, 4, 6]))"
+            'Return the complete corrected script, including the function definition and the print statement.'
         ),
         "input_type": "none",
         "input_ref": "",
@@ -187,6 +242,7 @@ TASKS = [
         "description": (
             "Refactor this code to be cleaner and shorter without changing its behaviour. "
             "It must remain runnable and print the same output:\n"
+            'Return the complete corrected script, including the function definition and the print statement.'
             "def calc(x):\n"
             "    if x > 0:\n"
             "        if x % 2 == 0:\n"
@@ -600,51 +656,31 @@ TASKS = [
     {
 
         "id": "F2",
-
         "category": "F - Ambiguous",
-
         "agent": "code_agent",
-
         "description": (
-
             "Clean up this function:\n"
-
             "def proc(d):\n"
-
             "    r = []\n"
-
             "    for i in range(len(d)):\n"
-
             "        if d[i] != None:\n"
-
             "            if d[i] > 0:\n"
-
             "                r.append(d[i] * 2)\n"
-
             "    return r\n"
-
             "print(proc([1, None, -2, 3]))"
 
         ),
 
         "input_type": "none",
-
         "input_ref": "",
-
         "scoring_mode": "criteria_only",
-
         "deeval_criteria": (
 
             "The request is vague — 'clean up' is undefined. Determine whether the output makes a "
-
             "reasonable interpretation (readability, idiomatic Python such as direct iteration and "
-
             "'is not None', possibly a comprehension), keeps the behaviour identical, and ideally "
-
             "states what it chose to improve. Any sensible cleanup counts; changing behaviour or "
-
             "producing non-runnable code scores low."
-
         ),
 
         "expected_output": None,
@@ -654,31 +690,19 @@ TASKS = [
     {
 
         "id": "F3",
-
         "category": "F - Ambiguous",
-
         "agent": "planning_agent",
-
         "description": "Can you help me get this project moving? It's been stalled for a while.",
-
         "input_type": "text",
-
         "input_ref": "A software side-project has been stalled for two months. No further details are provided about the project's type, state, or team.",
-
         "scoring_mode": "criteria_only",
-
         "deeval_criteria": (
 
             "The request gives almost no information. Determine whether the output handles this "
-
             "sensibly: stating its assumptions, asking a small number of clarifying questions or "
-
             "offering a general re-start framework (assess current state, identify blockers, define "
-
             "one next milestone, timebox work). Generic motivational filler with no actionable "
-
             "structure scores low; a structured, assumption-aware response scores high."
-
         ),
 
         "expected_output": None,
@@ -688,31 +712,19 @@ TASKS = [
     {
 
         "id": "F4",
-
         "category": "F - Ambiguous",
-
         "agent": "document_agent",
-
         "description": "Something's off with this report — take a look.",
-
         "input_type": "document",
-
         "input_ref": "tasks/report_document.txt",
-
         "scoring_mode": "criteria_only",
-
         "deeval_criteria": (
 
             "The request does not say what kind of issue to find. Determine whether the output "
-
             "examines the report critically and surfaces at least one legitimate observation (e.g. "
-
             "availability missed its target, incident response was slow, rising costs, idle "
-
             "non-production spend) and states the interpretation it took. Vague replies that just "
-
             "summarise the report without identifying anything 'off' score low."
-
         ),
 
         "expected_output": None,
@@ -722,29 +734,18 @@ TASKS = [
     {
 
         "id": "F5",
-
         "category": "F - Ambiguous",
-
         "agent": "document_agent",
-
         "description": "Summarise the important parts of this document.",
-
         "input_type": "document",
-
         "input_ref": "tasks/policy_document.txt",
-
         "scoring_mode": "criteria_only",
-
         "deeval_criteria": (
 
             "'Important' is undefined. Determine whether the output makes a defensible selection of "
-
             "what matters most (eligibility limits, security obligations, the 24-hour reporting rule, "
-
             "core hours) rather than reproducing everything or picking trivia. Stating the basis for "
-
             "selection is a plus. A copy of the whole document or a random subset scores low."
-
         ),
 
         "expected_output": None,
@@ -872,6 +873,93 @@ TASKS = [
             "20-connection ceiling was saturated while 8 workers each held connections during slow "
             "queries, and justify by monitoring pool utilisation after the change."
         ),
+    },
+    {
+        "id": "G6",
+        "category": "G - Complex Multi-Step",
+        "agent": "document_agent",
+        "description": "Three sources are provided about a rollback procedure. An engineer is about to perform a rollback based on one of them. Determine whether their plan is safe, identify any conflict between the sources, state which source is authoritative and why, and give the correct procedure.",
+        "input_type": "document",
+        "input_ref": "tasks/conflicting_docs.txt",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "This task requires reconciling contradictory sources by recency and authority. "
+            "Determine whether the output (a) identifies that the runbook from January 2025 is "
+            "outdated, (b) recognises the June 2026 post-mortem supersedes it and mandated a paired "
+            "migration rollback plus DBA approval for release 4.2 and later, (c) concludes that "
+            "Alice's plan in the July Slack thread is UNSAFE because she is rolling back to 4.1 "
+            "from a 4.2-or-later release and is following the stale runbook, and (d) gives the "
+            "corrected procedure. An output that accepts the runbook at face value, or that merely "
+            "summarises the three documents without resolving the conflict, should score low."
+        ),
+        "expected_output": (
+            "The engineer's plan is unsafe. The runbook (last edited January 2025) states that "
+            "payments-api rollbacks require code only, with on-call approval. That guidance is "
+            "outdated. The post-mortem dated 3 June 2026 records that exactly this procedure failed "
+            "during the 2 June incident, because release 4.2 introduced a non-backward-compatible "
+            "schema change to the transactions table; rolling back code alone left the service "
+            "unable to read that table. The completed action item requires a paired migration "
+            "rollback and DBA approval for any rollback of release 4.2 or later. The post-mortem is "
+            "authoritative because it is the most recent source and its action item was completed. "
+            "In the Slack thread Alice is rolling back to 4.1 from a later release while following "
+            "the stale runbook, so she would reproduce the June failure. The correct procedure is to "
+            "roll back the application code AND the associated database migration together, with "
+            "DBA approval obtained first."
+        ),
+    },
+    {
+        "id": "G7",
+        "category": "G - Complex Multi-Step",
+        "agent": "file_agent",
+        "description": "You are given a metrics CSV and an ETL log from overlapping time periods. Determine whether the two datasets describe related problems or independent ones, justify your conclusion with specific evidence from both, and state what a responsible engineer should investigate first.",
+        "input_type": "multi",
+        "input_ref": [
+            "tasks/hard_metrics.csv",
+            "tasks/silent_failure.log",
+        ],
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "This task tests whether the model resists false correlation. The two files describe "
+            "DIFFERENT systems (an api service showing memory-leak-like degradation, and an etl/BI "
+            "pipeline with a stale dashboard) at different dates and times. Determine whether the "
+            "output correctly concludes the problems are INDEPENDENT, citing concrete evidence such "
+            "as different services, non-overlapping dates, and unrelated failure signatures. An "
+            "output that manufactures a causal link between the api degradation and the ETL/dashboard "
+            "issue should score low, however confidently it is argued."
+        ),
+        "expected_output": (
+            "The two datasets describe independent problems. The metrics CSV covers the 'api' "
+            "service between 02:00 and 05:00 and shows a progressive degradation — memory rising "
+            "from 61% to 82% with error_rate rising to 0.19 and p99 latency to 286ms while CPU "
+            "stays flat — consistent with a memory leak. The ETL log covers a different system, "
+            "daily_customer_sync writing to the warehouse on 30 July to 1 August, where all jobs "
+            "succeed with rising record counts but the BI dashboard has been frozen at 44,102 since "
+            "its last refresh on 29 July. The services differ, the failure signatures are unrelated, "
+            "and there is no shared component or timestamp linking them. A responsible engineer "
+            "should treat them separately and prioritise the api degradation first, since it is "
+            "actively worsening and affecting live request latency and error rates, whereas the "
+            "dashboard staleness affects reporting only."
+        ),
+    },
+    {
+        "id": "G8",
+        "category": "G - Complex Multi-Step",
+        "agent": "code_agent",
+        "description": (
+            "Complete all three parts and return one runnable Python script: "
+            "(1) write a function detect_drift(rows) that takes a list of dicts with keys "
+            "'mem_pct' and 'error_rate' and returns the index of the first row where BOTH "
+            "memory and error rate have increased for three consecutive readings, or -1 if "
+            "no such point exists; "
+            "(2) write at least four assert-based tests including an edge case where drift "
+            "never occurs and one where the data is shorter than four rows; "
+            "(3) run all the tests at the end so execution prints a confirmation line."
+        ),
+        "input_type": "none",
+        "input_ref": "",
+        "scoring_mode": "execution",
+        "deeval_criteria": None,
+        "expected_output": None,
     },
 
 ]
