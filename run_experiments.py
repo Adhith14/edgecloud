@@ -1,13 +1,12 @@
 # ============================================================
 # run_experiments.py — Automated Experiment Sweep
 # ============================================================
-# Runs the full benchmark across every combination of:
-#   system mode  x  local model
-# Each combination runs main.py as a separate subprocess with
-# environment variables set, so a crash in one run does not
-# kill the whole sweep. All results append to results/results.csv.
+# Runs the full benchmark across every experimental condition.
+# Each run is a separate subprocess with environment variables
+# set, so a crash in one condition cannot kill the whole sweep.
+# All results append to results/results.csv and results/runs.csv.
 #
-# Run inside tmux — the full sweep takes hours:
+# Run inside tmux — the full sweep takes many hours:
 #   tmux new -s sweep
 #   python run_experiments.py
 #   (Ctrl+B then D to detach)
@@ -18,99 +17,110 @@ import subprocess
 import time
 from datetime import datetime
 
-# ── WHAT TO SWEEP ───────────────────────────────────────────
+# ── SWEEP CONFIGURATION ─────────────────────────────────────
 
-# How many times to repeat the entire sweep, so results can be
-# reported as mean +/- standard deviation rather than single points.
 REPEATS = 3
 
-# Local models to test (the size ladder + quantization pair + specialist)
-LOCAL_MODELS = [
-    "qwen2.5:0.5b",
-    "qwen2.5:1.5b",
-    "qwen2.5:3b",
-    "qwen2.5:7b",                  # this IS the q4_K_M quant
-    "qwen2.5:7b-instruct-q8_0",    # q8 for the quantization comparison
-    "llama3.2:3b",                 # cross-family check
-]
+# Text model sizes for the v1 scale study. Tool use is unreliable
+# below 3B, so v2 conditions use only the larger two.
+V1_MODELS = ["qwen2.5:0.5b", "qwen2.5:1.5b", "qwen2.5:3b", "qwen2.5:7b"]
+V2_MODELS = ["qwen2.5:3b", "qwen2.5:7b"]
 
-VISION_MODELS = ["qwen2.5vl:3b", "llava:7b"]  # use your exact tags
+# Quantisation comparison, v1 only (isolates precision from architecture)
+QUANT_MODELS = ["qwen2.5:7b", "qwen2.5:7b-instruct-q8_0"]
 
-# System modes. cloud_only does not depend on the local model,
-# so it is run once separately rather than for every model.
-LOCAL_DEPENDENT_MODES = ["local_only", "hybrid"]
+# Vision comparison, held at a fixed text model
+VISION_MODELS = ["qwen2.5vl:3b", "llava:7b"]
+PRIMARY_VISION = "qwen2.5vl:3b"
 
-def run_one(system_mode, local_model, vision_model=None, repeat=1):
+# Per-run wall-clock ceiling. v2 runs with retries can exceed 20 min,
+# so this is generous; it only guards against a genuine hang.
+RUN_TIMEOUT_S = 5400
+
+
+def run_one(system_mode, local_model, assignment="specialist",
+            vision_model=PRIMARY_VISION, repeat=1, note=""):
+    """Runs main.py once with the given configuration."""
     env = os.environ.copy()
     env["ECS_SYSTEM_MODE"] = system_mode
     env["ECS_LOCAL_MODEL"] = local_model
-    if vision_model:
-        env["ECS_VISION_MODEL"] = vision_model
+    env["ECS_MODEL_ASSIGNMENT"] = assignment
+    env["ECS_VISION_MODEL"] = vision_model
+    # v2 specialist models follow the sweep's text model where relevant
+    env["ECS_SHARED_MODEL"] = local_model
+    env["ECS_FILE_MODEL"] = local_model
+    env["ECS_PLAN_MODEL"] = local_model
 
-    label = f"rep{repeat} | {system_mode} | {local_model}"
-    print(f"\n{'='*70}")
-    print(f"  RUN: {label}")
+    label = f"rep{repeat} | {system_mode} | {local_model} | {assignment} | {vision_model}"
+    if note:
+        label += f" | {note}"
+
+    print(f"\n{'='*72}")
+    print(f"  {label}")
     print(f"  Started: {datetime.now().strftime('%H:%M:%S')}")
-    print(f"{'='*70}\n")
+    print(f"{'='*72}\n")
 
     start = time.time()
     try:
-        # capture_output=False so you can watch progress live in tmux
-        result = subprocess.run(
-            ["python", "main.py"],
-            env=env,
-            timeout=7200   # 2 hour ceiling per run, so one hang cannot stall the sweep
-        )
+        result = subprocess.run(["python", "main.py"], env=env, timeout=RUN_TIMEOUT_S)
         status = "OK" if result.returncode == 0 else f"FAILED (exit {result.returncode})"
     except subprocess.TimeoutExpired:
         status = "TIMEOUT"
     except Exception as e:
-        status = f"ERROR: {e}"
+        status = f"ERROR: {str(e)[:40]}"
 
     mins = round((time.time() - start) / 60, 1)
-    print(f"\n  --> {label}: {status}  ({mins} min)\n")
+    print(f"\n  --> {status}  ({mins} min)  {label}\n")
     return label, status, mins
 
 
 def main():
-    print("\n" + "="*70)
-    print("  EDGE-CLOUD SWARM — EXPERIMENT SWEEP")
+    print("\n" + "="*72)
+    print("  EDGE-CLOUD SWARM — FULL EXPERIMENT SWEEP")
     print(f"  Repeats: {REPEATS}")
     print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*70)
+    print("="*72)
 
     summary = []
 
     for rep in range(1, REPEATS + 1):
-        print(f"\n{'#'*70}")
-        print(f"  REPEAT {rep} OF {REPEATS}")
-        print(f"{'#'*70}\n")
+        print(f"\n{'#'*72}\n  REPEAT {rep} OF {REPEATS}\n{'#'*72}")
 
-        # Cloud-only baseline — local model is irrelevant here
+        # ── 1. Cloud baseline (local model irrelevant) ──────
         summary.append(run_one("cloud_only", "n/a", repeat=rep))
 
-        # Every local model, in both local-only and hybrid modes
-        for model in LOCAL_MODELS:
-            for mode in LOCAL_DEPENDENT_MODES:
-                summary.append(run_one(mode, model,
-                                       vision_model=VISION_MODELS[0],
-                                       repeat=rep))
+        # ── 2. v1 scale study: local-only and hybrid ────────
+        for model in V1_MODELS:
+            summary.append(run_one("local_only", model, repeat=rep))
+            summary.append(run_one("hybrid", model, repeat=rep))
 
-        # Dedicated vision comparison — text model held constant
+        # ── 3. Quantisation comparison (q8 only; q4 covered above) ──
+        summary.append(run_one("local_only", "qwen2.5:7b-instruct-q8_0",
+                               repeat=rep, note="quant"))
+
+        # ── 4. v2: tools, specialists, iteration ────────────
+        for model in V2_MODELS:
+            for mode in ["v2_local", "v2_hybrid"]:
+                for assign in ["specialist", "shared_generalist"]:
+                    summary.append(run_one(mode, model, assignment=assign, repeat=rep))
+
+        # ── 5. Vision model comparison (fixed text model) ───
         for vm in VISION_MODELS:
+            if vm == PRIMARY_VISION:
+                continue     # already covered by the runs above
             summary.append(run_one("local_only", "qwen2.5:3b",
-                                   vision_model=vm, repeat=rep))
+                                   vision_model=vm, repeat=rep, note="vision"))
 
     # ── FINAL SUMMARY ───────────────────────────────────────
-    print("\n" + "="*70)
+    print("\n" + "="*72)
     print("  SWEEP COMPLETE")
-    print("="*70)
+    print("="*72)
     total = 0
     for label, status, mins in summary:
-        print(f"  {status:<22} {mins:>6} min   {label}")
+        print(f"  {status:<20} {mins:>7} min   {label}")
         total += mins
-    print(f"\n  Total runs: {len(summary)}   Total time: {round(total/60,1)} hours")
-    print("="*70 + "\n")
+    print(f"\n  Runs: {len(summary)}   Total: {round(total/60,1)} hours")
+    print("="*72 + "\n")
 
 
 if __name__ == "__main__":

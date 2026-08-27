@@ -961,5 +961,141 @@ TASKS = [
         "deeval_criteria": None,
         "expected_output": None,
     },
+    
+    # ════════════════════════════════════════════════════════
+    # CATEGORY H — Chained Multi-Agent Tasks
+    # These require more than one specialist. The supervisor
+    # decomposes them and routes subtasks to different agents.
+    # ════════════════════════════════════════════════════════
+    {
+        "id": "H1",
+        "category": "H - Chained Multi-Agent",
+        "agent": "file_agent",          # fallback if chaining is disabled
+        "chain": True,
+        "description": (
+            "The file buggy_report.py contains a Python script with a bug. "
+            "Read it, identify the bug, produce a corrected version of the "
+            "script, and verify the corrected version runs without error."
+        ),
+        "input_type": "none",
+        "input_ref": "",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "Determine whether the output identifies the actual bug — the 'west' "
+            "region in SALES_DATA is missing its 'q4' entry while annual_total "
+            "loops over all four quarters, causing KeyError: 'q4' — and provides "
+            "a corrected script that would run. Blaming the lookup line in "
+            "quarter_total without tracing back to the missing data should score "
+            "lower. Generic error-handling advice without identifying the data "
+            "gap should score low."
+        ),
+        "expected_output": (
+            "The bug is in SALES_DATA: the 'west' region defines only q1, q2 and "
+            "q3, while annual_total iterates over q1 to q4 for every region, so "
+            "quarter_total raises KeyError: 'q4' when it reaches west. The fix is "
+            "to add the missing q4 value for west, or to use "
+            "region_data.get(quarter, 0) so missing quarters are tolerated. The "
+            "corrected script runs and prints an annual total for all four regions."
+        ),
+    },
+    {
+        "id": "H2",
+        "category": "H - Chained Multi-Agent",
+        "agent": "file_agent",
+        "chain": True,
+        "description": (
+            "Read the server log sample_log.txt, extract the error events, then "
+            "write and run a Python script that counts how many errors occurred "
+            "per hour. Report both the errors you found and the counts your "
+            "script produced."
+        ),
+        "input_type": "none",
+        "input_ref": "",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "This task requires reading a file AND writing working code. Determine "
+            "whether the output (a) identifies the error events from the log, "
+            "including the cache connection failure, the NullPointerException and "
+            "the payment timeout, and (b) reports per-hour counts derived from "
+            "actual code rather than asserted from memory. All the errors occur "
+            "within the 08:00 hour, so a correct count groups them there."
+        ),
+        "expected_output": (
+            "The log contains error events at 08:07:01 (cache service connection "
+            "refused), 08:07:08 (cache unavailable after 3 retries), 08:13:10 "
+            "(NullPointerException in OrderService.processOrder, with stack trace) "
+            "and 08:19:55 (payment processing timeout for order 9921). All fall "
+            "within the 08:00 hour, so the per-hour count is: 08:00 -> 4 or 5 "
+            "errors depending on whether the stack trace line is counted separately."
+        ),
+    },
+    {
+        "id": "H3",
+        "category": "H - Chained Multi-Agent",
+        "agent": "document_agent",
+        "chain": True,
+        "description": (
+            "Read the quarterly report report_document.txt. Extract the monetary "
+            "figures it contains, then write and run a Python script that "
+            "calculates what percentage of the quarterly infrastructure spend the "
+            "projected savings represent. Report the figures and the calculated "
+            "percentage."
+        ),
+        "input_type": "none",
+        "input_ref": "",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "Determine whether the output extracts the correct figures from the "
+            "report — total quarterly spend of GBP 142,000 and projected savings "
+            "of GBP 8,500 per quarter — and reports a calculated percentage of "
+            "approximately 6% (8500/142000 = 5.99%). Wrong figures, or a "
+            "percentage not matching the figures given, should score low."
+        ),
+        "expected_output": (
+            "The report gives total infrastructure spend for the quarter as "
+            "GBP 142,000 and projected savings from the automated shutdown policy "
+            "as GBP 8,500 per quarter. The savings represent approximately 6.0% "
+            "of quarterly spend (8,500 / 142,000 = 5.99%)."
+        ),
+    },
+    {
+        "id": "H4",
+        "category": "H - Chained Multi-Agent",
+        "agent": "file_agent",
+        "chain": True,
+        "description": (
+            "Read the three service logs service_a.log, service_b.log and "
+            "service_c.log. Determine the root cause of the incident, then produce "
+            "a remediation plan listing the steps an engineering team should take "
+            "to prevent it recurring."
+        ),
+        "input_type": "none",
+        "input_ref": "",
+        "scoring_mode": "expected",
+        "deeval_criteria": (
+            "This requires log analysis followed by planning. Determine whether "
+            "the output (a) identifies the root cause: a scheduled REINDEX taking "
+            "an exclusive lock on the inventory table, exhausting the database "
+            "connection pool, which blocked order-service workers and caused "
+            "api-gateway 502 errors, and (b) provides a concrete remediation plan "
+            "addressing that cause, such as scheduling reindex operations off-peak, "
+            "using concurrent reindexing, increasing pool capacity, or adding "
+            "circuit breaking. A plan that does not follow from the identified "
+            "cause should score low."
+        ),
+        "expected_output": (
+            "Root cause: a scheduled REINDEX on the inventory table took an ACCESS "
+            "EXCLUSIVE lock at 09:14:00, blocking queries and exhausting the "
+            "20-connection pool by 09:14:38. order-service workers then blocked "
+            "waiting for connections and its queries timed out, and api-gateway "
+            "returned 502 errors from 09:14:47 until recovery at 09:17:38. "
+            "Remediation: schedule reindex operations during genuine low-traffic "
+            "windows or use CONCURRENT reindexing to avoid exclusive locks; "
+            "increase connection pool headroom; add circuit breaking and load "
+            "shedding in order-service so pool exhaustion degrades gracefully; "
+            "add alerting on pool utilisation and lock wait times so the condition "
+            "is detected before user impact."
+        ),
+    },
 
 ]

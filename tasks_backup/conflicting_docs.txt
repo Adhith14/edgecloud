@@ -1,0 +1,22 @@
+=== DOCUMENT 1: Deployment Runbook (last edited 12 Jan 2025) ===
+Service: payments-api
+Rollback procedure: run `deploy rollback --version=previous`.
+Note: the payments-api service does NOT require a database migration
+rollback, as schema changes are backward compatible by policy.
+Approval required from: on-call engineer only.
+
+=== DOCUMENT 2: Incident Post-Mortem (dated 3 June 2026) ===
+During the 2 June incident, the team followed the runbook and ran
+`deploy rollback --version=previous`. This failed to restore service
+because release 4.2 (May 2026) introduced a non-backward-compatible
+schema change to the transactions table. Rolling back application code
+without also rolling back the migration left the service unable to read
+the transactions table.
+Action item (completed 5 June 2026): runbook must be updated to require
+a paired migration rollback and a DBA approval for any rollback of
+release 4.2 or later.
+
+=== DOCUMENT 3: Slack thread (14 July 2026) ===
+> alice: quick q, rolling back payments-api to 4.1, runbook says code only?
+> bob: yeah runbook says code only, should be fine
+> alice: cool, doing it now

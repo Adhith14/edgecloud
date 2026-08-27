@@ -1,0 +1,4 @@
+PagerDuty Alert — 2026-07-14 09:15 UTC
+Service: order-api (prod)
+Alert: High error rate — 61% of requests failing with 502 over the last 5 minutes.
+First detected: 09:14:47 UTC. Customer impact confirmed by support tickets.

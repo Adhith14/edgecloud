@@ -1,0 +1,15 @@
+Edge computing refers to the practice of processing data closer to where it is generated, 
+rather than sending it to a centralised cloud server. This approach reduces the amount of 
+data that must be transmitted over a network, which in turn lowers latency and decreases 
+bandwidth costs. In the context of artificial intelligence, edge computing enables machine 
+learning models to run directly on local devices such as smartphones, laptops, or IoT sensors.
+
+The key advantage of edge AI is privacy: sensitive data such as medical records, financial 
+transactions, or personal communications can be processed locally without ever leaving the 
+device. This is particularly important in regulated industries where data residency and 
+compliance requirements restrict the use of external cloud services.
+
+However, edge AI also introduces challenges. Local devices have limited computational 
+resources compared to cloud servers, meaning that only smaller, more efficient models 
+can be deployed at the edge. Balancing model performance with resource constraints 
+remains an active area of research in the field.

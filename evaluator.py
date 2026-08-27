@@ -265,7 +265,7 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
         # Write the header row only once (when the file is first created)
         if not file_exists:
             writer.writerow([
-                "run_time", "system", "model", "vision_model", "task_id", "category", "agent",
+                "run_time", "system", "model", "model_assignment", "vision_model", "task_id", "category", "agent",
                 "success", "score", "escalated", "local_score", "latency_s", "cloud_calls",
                 "cost_usd", "eval_cost_usd", "eval_tokens",
                 "data_kb", "iterations_used", "tools_called",
@@ -279,6 +279,7 @@ def save_results_csv(results, model_name, system_name="edge-cloud-swarm", filepa
                 run_time,
                 system_name,
                 model_name,
+                config.MODEL_ASSIGNMENT if system_name.startswith("v2") else "n/a",
                 config.LOCAL_VISION_MODEL,
                 r.task_id,
                 r.category,
@@ -336,7 +337,7 @@ def save_run_summary(results, model_name, system_name, orchestration_tokens,
 
         task_cost = sum(r.cost_usd for r in results)
         writer.writerow([
-            run_time, system_name, model_name, config.MODEL_ASSIGNMENT,
+            run_time, system_name, model_name, config.MODEL_ASSIGNMENT if system_name.startswith("v2") else "n/a",
             len(results), len(scored), passed,
             round(passed / len(scored) * 100, 1) if scored else 0,
             escalated,

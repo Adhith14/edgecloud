@@ -32,7 +32,7 @@ PROTECTED_FILES = {
     "app_config.yaml", "incident_error.txt", "broken_pipeline.txt",
     "hard_metrics.csv", "conflicting_docs.txt", "silent_failure.log",
     "error_screenshot.png", "chart.png", "diagram.png",
-    "data_table.png", "complex_error.png",
+    "data_table.png", "complex_error.png","buggy_report.py"
 }
 
 

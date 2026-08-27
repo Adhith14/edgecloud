@@ -1,0 +1,12 @@
+2026-07-20 02:11:03 INFO  [report-worker] Nightly report job started
+2026-07-20 02:11:05 INFO  [report-worker] Loaded 12,400 records from orders table
+2026-07-20 02:11:09 WARN  [db-pool] Connection acquired but not returned (active=14/20)
+2026-07-20 02:11:48 WARN  [db-pool] Connection acquired but not returned (active=17/20)
+2026-07-20 02:12:15 WARN  [db-pool] Connection acquired but not returned (active=20/20)
+2026-07-20 02:12:16 WARN  [jvm] Heap usage 71% (2.8GB/4.0GB)
+2026-07-20 02:13:02 WARN  [jvm] Heap usage 84% (3.4GB/4.0GB)
+2026-07-20 02:13:44 WARN  [jvm] Heap usage 92% (3.7GB/4.0GB)
+2026-07-20 02:14:02 ERROR [report-worker] java.lang.OutOfMemoryError: Java heap space
+2026-07-20 02:14:02 ERROR [report-worker]   at ReportGenerator.buildReport(ReportGenerator.java:203)
+2026-07-20 02:14:02 ERROR [report-worker]   at ReportJob.run(ReportJob.java:58)
+2026-07-20 02:14:03 FATAL [main] Worker terminated unexpectedly

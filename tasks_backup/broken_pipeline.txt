@@ -1,0 +1,17 @@
+Data pipeline: nightly_sales_report
+Stages:
+  1. extract  — pulls yesterday's orders from PostgreSQL into /data/raw/orders.csv
+  2. clean    — removes rows with null customer_id, writes /data/clean/orders.csv
+  3. enrich   — joins customer country from customers table, writes /data/enriched/orders.csv
+  4. aggregate— sums revenue per country, writes /data/out/summary.csv
+  5. publish  — uploads summary.csv to the reporting dashboard
+
+Last run output:
+  extract:   OK — 41,203 rows written
+  clean:     OK — 39,876 rows written
+  enrich:    OK — 39,876 rows written, WARNING: 2,141 rows have country=NULL
+  aggregate: OK — summary.csv written, 1 row: country=NULL, revenue=£312,449
+  publish:   OK — dashboard updated
+
+Complaint from finance team: "The dashboard shows all revenue under a single
+blank country. Yesterday it showed 14 countries correctly."

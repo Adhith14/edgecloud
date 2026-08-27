@@ -1,0 +1,2 @@
+run_time,system,model,model_assignment,tasks_total,tasks_scored,tasks_passed,success_rate_pct,tasks_escalated,orchestration_tokens,orchestration_cost_usd,task_cost_usd,total_system_cost_usd,eval_cost_usd,total_latency_s,total_data_kb,total_iterations,tasks_retried,total_tool_calls,vision_model
+2026-08-25 03:20:39,v2_local,qwen2.5:3b,specialist,44,44,33,75.0,0,17707,0.005843,0.0,0.005843,0.0101976,872.23,0.0,76,31,89,qwen2.5vl:3b

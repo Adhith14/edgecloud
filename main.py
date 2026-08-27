@@ -36,6 +36,7 @@ from cloud_agent import run as run_cloud_agent
 from evaluator import TaskResult, print_results_table, save_results_csv, save_run_summary, calculate_cost
 from agents.local_vision_agent import run as run_local_vision_agent
 import graph as v2_graph
+import graph_chain
 
 def handle_escalation(r, task_description, task_input, client):
     """
@@ -187,6 +188,17 @@ def run_agent_for_task(task, task_input, client):
             return {"output": output, "tokens_used": 0, "is_cloud": False,
                     "v2": {"iterations_used": 1, "tools_called": [],
                            "models_used": [config.V2_SPECIALIST_MODELS["multimodal_agent"]]}}
+            
+        # Chained tasks go through the decomposition graph instead of the
+        # single-agent graph. Flagged per-task in benchmark.py.
+        if config.ENABLE_CHAINING and task.get("chain"):
+            result = graph_chain.run_chained_task(
+                task["id"], task["description"], client
+            )
+            return {"output": result["output"],
+                    "tokens_used": result.get("cloud_tokens", 0),
+                    "is_cloud": False,
+                    "v2": result}
 
 
 
@@ -287,6 +299,23 @@ def main():
     # ── STEP 2: RUN EVERY TASK ──────────────────────────────
     print(f"\n[2/4] Running {len(TASKS)} tasks...")
     results = []
+    
+    # Remove files agents wrote in previous runs. Without this, agents see
+    # prior runs' output when they call list_files, which pollutes the
+    # benchmark and makes filename selection unreliable.
+    import glob
+    from tools import PROTECTED_FILES
+    removed = 0
+    for f in glob.glob("tasks/*"):
+        if os.path.basename(f) not in PROTECTED_FILES:
+            try:
+                os.remove(f)
+                removed += 1
+            except Exception:
+                pass
+    if removed:
+        print(f"      Cleaned {removed} file(s) left by previous runs")
+
 
     for task in TASKS:
         print(f"\n  {task['id']} — {task['category']} ({task['agent']})")

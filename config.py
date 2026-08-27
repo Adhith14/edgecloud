@@ -90,3 +90,16 @@ MAX_TOOL_CALLS = int(os.environ.get("ECS_MAX_TOOL_CALLS", "8"))
 # Wall-clock ceiling for a single task in the v2 graph, so one
 # pathological task cannot stall an unattended sweep.
 V2_TASK_TIMEOUT_S = int(os.environ.get("ECS_V2_TASK_TIMEOUT", "300"))
+
+# ── V2: MULTI-AGENT CHAINING ────────────────────────────────
+# When a task is flagged "chain": True in benchmark.py, the cloud CEO
+# decomposes it into subtasks and routes each to a different specialist,
+# passing prior outputs forward. Single-agent tasks are unaffected.
+ENABLE_CHAINING = os.environ.get("ECS_CHAINING", "true").lower() == "true"
+
+# Ceiling on decomposition, so one task cannot spawn an unbounded chain.
+MAX_SUBTASKS = int(os.environ.get("ECS_MAX_SUBTASKS", "4"))
+
+# Chained tasks run several agents in sequence, so they need a longer
+# wall-clock budget than single-agent tasks.
+CHAIN_TASK_TIMEOUT_S = int(os.environ.get("ECS_CHAIN_TIMEOUT", "600"))

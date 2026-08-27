@@ -1,0 +1,15 @@
+service: order-api
+version: 2.4.1
+database:
+  host: db-prod-3.internal
+  pool_size: 20
+  timeout_ms: 4000
+cache:
+  enabled: true
+  host: cache-prod-1.internal
+  ttl_seconds: 300
+workers: 8
+log_level: WARN
+feature_flags:
+  new_checkout: true
+  async_reports: false

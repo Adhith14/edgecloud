@@ -1,0 +1,9 @@
+run_time,system,model,model_assignment,tasks_total,tasks_scored,tasks_passed,success_rate_pct,tasks_escalated,orchestration_tokens,orchestration_cost_usd,task_cost_usd,total_system_cost_usd,eval_cost_usd,total_latency_s,total_data_kb,total_iterations,tasks_retried,total_tool_calls,vision_model
+2026-08-21 03:16:36,v2_local,qwen2.5:3b,specialist,40,40,35,87.5,0,16398,0.005411,0.0,0.005411,0.00905655,719.43,0.0,66,26,74,qwen2.5vl:3b
+2026-08-21 03:42:51,v2_local,qwen2.5:3b,shared_generalist,40,40,32,80.0,0,15296,0.005048,0.0,0.005048,0.00897945,1141.99,0.0,67,28,110,qwen2.5vl:3b
+2026-08-21 03:57:40,v2_hybrid,qwen2.5:3b,specialist,40,40,39,97.5,8,17025,0.005618,0.001952,0.00757,0.010995,696.98,7.213,66,26,72,qwen2.5vl:3b
+2026-08-21 04:19:55,v2_hybrid,qwen2.5:3b,shared_generalist,40,40,40,100.0,9,16491,0.005442,0.001955,0.007397,0.0108372,1122.13,4.593,66,27,113,qwen2.5vl:3b
+2026-08-21 04:25:25,local_only,qwen2.5:3b,specialist,40,40,31,77.5,0,17664,0.005829,0.0,0.005829,0.00928815,183.46,0.0,0,0,0,qwen2.5vl:3b
+2026-08-21 04:29:49,cloud_only,gpt-4o-mini,specialist,40,40,37,92.5,0,14766,0.004873,0.148092,0.152965,0.00882075,130.65,25.949,0,0,0,qwen2.5vl:3b
+2026-08-25 02:02:37,v2_local,qwen2.5:3b,specialist,44,44,33,75.0,0,17639,0.005821,0.0,0.005821,0.010122,921.69,0.0,77,31,91,qwen2.5vl:3b
+2026-08-25 02:35:12,v2_local,qwen2.5:3b,specialist,44,44,32,72.7,0,17657,0.005827,0.0,0.005827,0.0102456,892.09,0.0,76,31,89,qwen2.5vl:3b
