@@ -1,5 +1,0 @@
-- 2026-06-18 08:07:01 ERROR Failed to connect to cache service: Connection refused
-- 2026-06-18 08:07:02 INFO Retrying cache connection (attempt 1 of 3)
-- 2026-06-18 08:07:05 INFO Retrying cache connection (attempt 2 of 3)
-- 2026-06-18 08:07:08 ERROR Cache service unavailable after 3 retries. Falling back to database.
-- 2026-06-18 08:13:10 ERROR NullPointerException in OrderService.processOrder() at line 142

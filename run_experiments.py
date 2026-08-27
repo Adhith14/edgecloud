@@ -35,7 +35,7 @@ PRIMARY_VISION = "qwen2.5vl:3b"
 
 # Per-run wall-clock ceiling. v2 runs with retries can exceed 20 min,
 # so this is generous; it only guards against a genuine hang.
-RUN_TIMEOUT_S = 5400
+RUN_TIMEOUT_S = 7200 
 
 
 def run_one(system_mode, local_model, assignment="specialist",
@@ -74,44 +74,69 @@ def run_one(system_mode, local_model, assignment="specialist",
     return label, status, mins
 
 
+# def main():
+#     print("\n" + "="*72)
+#     print("  EDGE-CLOUD SWARM — FULL EXPERIMENT SWEEP")
+#     print(f"  Repeats: {REPEATS}")
+#     print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+#     print("="*72)
+
+#     summary = []
+
+#     for rep in range(1, REPEATS + 1):
+#         print(f"\n{'#'*72}\n  REPEAT {rep} OF {REPEATS}\n{'#'*72}")
+
+#         # ── 1. Cloud baseline (local model irrelevant) ──────
+#         summary.append(run_one("cloud_only", "n/a", repeat=rep))
+
+#         # ── 2. v1 scale study: local-only and hybrid ────────
+#         for model in V1_MODELS:
+#             summary.append(run_one("local_only", model, repeat=rep))
+#             summary.append(run_one("hybrid", model, repeat=rep))
+
+#         # ── 3. Quantisation comparison (q8 only; q4 covered above) ──
+#         summary.append(run_one("local_only", "qwen2.5:7b-instruct-q8_0",
+#                                repeat=rep, note="quant"))
+
+#         # ── 4. v2: tools, specialists, iteration ────────────
+#         for model in V2_MODELS:
+#             for mode in ["v2_local", "v2_hybrid"]:
+#                 for assign in ["specialist", "shared_generalist"]:
+#                     summary.append(run_one(mode, model, assignment=assign, repeat=rep))
+
+#         # ── 5. Vision model comparison (fixed text model) ───
+#         for vm in VISION_MODELS:
+#             if vm == PRIMARY_VISION:
+#                 continue     # already covered by the runs above
+#             summary.append(run_one("local_only", "qwen2.5:3b",
+#                                    vision_model=vm, repeat=rep, note="vision"))
+
+#     # ── FINAL SUMMARY ───────────────────────────────────────
+#     print("\n" + "="*72)
+#     print("  SWEEP COMPLETE")
+#     print("="*72)
+#     total = 0
+#     for label, status, mins in summary:
+#         print(f"  {status:<20} {mins:>7} min   {label}")
+#         total += mins
+#     print(f"\n  Runs: {len(summary)}   Total: {round(total/60,1)} hours")
+#     print("="*72 + "\n")
+
+
 def main():
     print("\n" + "="*72)
-    print("  EDGE-CLOUD SWARM — FULL EXPERIMENT SWEEP")
-    print(f"  Repeats: {REPEATS}")
+    print("  V2 SWEEP (completing missing conditions)")
     print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*72)
 
     summary = []
-
     for rep in range(1, REPEATS + 1):
         print(f"\n{'#'*72}\n  REPEAT {rep} OF {REPEATS}\n{'#'*72}")
-
-        # ── 1. Cloud baseline (local model irrelevant) ──────
-        summary.append(run_one("cloud_only", "n/a", repeat=rep))
-
-        # ── 2. v1 scale study: local-only and hybrid ────────
-        for model in V1_MODELS:
-            summary.append(run_one("local_only", model, repeat=rep))
-            summary.append(run_one("hybrid", model, repeat=rep))
-
-        # ── 3. Quantisation comparison (q8 only; q4 covered above) ──
-        summary.append(run_one("local_only", "qwen2.5:7b-instruct-q8_0",
-                               repeat=rep, note="quant"))
-
-        # ── 4. v2: tools, specialists, iteration ────────────
         for model in V2_MODELS:
             for mode in ["v2_local", "v2_hybrid"]:
                 for assign in ["specialist", "shared_generalist"]:
                     summary.append(run_one(mode, model, assignment=assign, repeat=rep))
 
-        # ── 5. Vision model comparison (fixed text model) ───
-        for vm in VISION_MODELS:
-            if vm == PRIMARY_VISION:
-                continue     # already covered by the runs above
-            summary.append(run_one("local_only", "qwen2.5:3b",
-                                   vision_model=vm, repeat=rep, note="vision"))
-
-    # ── FINAL SUMMARY ───────────────────────────────────────
     print("\n" + "="*72)
     print("  SWEEP COMPLETE")
     print("="*72)
