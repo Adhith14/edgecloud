@@ -103,3 +103,11 @@ MAX_SUBTASKS = int(os.environ.get("ECS_MAX_SUBTASKS", "4"))
 # Chained tasks run several agents in sequence, so they need a longer
 # wall-clock budget than single-agent tasks.
 CHAIN_TASK_TIMEOUT_S = int(os.environ.get("ECS_CHAIN_TIMEOUT", "600"))
+
+# ── V2: CLOUD SWARM BASELINE ────────────────────────────────
+# The same v2 graph with every agent backed by a cloud model rather
+# than a local one. This isolates the contribution of the architecture
+# (tools, specialisation, iteration) from that of model location, and
+# supplies the multi-agent cloud baseline specified in the project brief.
+# Selected by ECS_MODEL_ASSIGNMENT=cloud_swarm.
+CLOUD_AGENT_MODEL = os.environ.get("ECS_CLOUD_AGENT_MODEL", "gpt-4o-mini")

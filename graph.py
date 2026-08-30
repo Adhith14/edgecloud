@@ -39,6 +39,7 @@ class SwarmState(TypedDict):
     passed: bool                    # did the critic accept the output
     tools_called: List[str]         # accumulated across attempts
     models_used: List[str]          # which models participated
+    cloud_tokens: int               # tokens consumed by cloud-hosted agents
     history: List[str]              # short trace, for debugging and logging
 
 
@@ -47,13 +48,17 @@ _critic = None
 
 def _get_critic():
     """
-    The critic uses the shared generalist model, not a specialist.
-    Judging output quality is a general reasoning task, and using one
-    consistent critic keeps the loop comparable across conditions.
+    The critic uses the shared generalist model for local conditions, or
+    the cloud model when running the cloud swarm baseline, so that the
+    review step matches the condition under test.
     """
     global _critic
     if _critic is None:
-        _critic = ChatOllama(model=config.V2_SHARED_MODEL, temperature=0)
+        if config.MODEL_ASSIGNMENT == "cloud_swarm":
+            from langchain_openai import ChatOpenAI
+            _critic = ChatOpenAI(model=config.CLOUD_AGENT_MODEL, temperature=0)
+        else:
+            _critic = ChatOllama(model=config.V2_SHARED_MODEL, temperature=0)
     return _critic
 
 
@@ -77,6 +82,7 @@ def supervisor_node(state: SwarmState) -> dict:
         "passed": False,
         "tools_called": [],
         "models_used": [],
+        "cloud_tokens": 0,
         "history": [f"supervisor -> routing to {state['agent_name']}"],
     }
 
@@ -109,6 +115,7 @@ def specialist_node(state: SwarmState) -> dict:
         "iterations": n,
         "tools_called": state.get("tools_called", []) + result["tools_called"],
         "models_used": list(set(state.get("models_used", []) + [result["model"]])),
+        "cloud_tokens": state.get("cloud_tokens", 0) + result.get("tokens", 0),
         "history": state.get("history", []) + [
             f"attempt {n}: {state['agent_name']} "
             f"({result['model']}) tools={result['tools_called'] or 'none'}"
@@ -162,7 +169,10 @@ def critic_node(state: SwarmState) -> dict:
     )
 
     try:
-        reply = _get_critic().invoke(prompt).content.strip()
+        reply_msg = _get_critic().invoke(prompt)
+        reply = reply_msg.content.strip()
+        cmeta = getattr(reply_msg, "usage_metadata", None) or {}
+        ctok = cmeta.get("total_tokens", 0)
     except Exception as e:
         # If the critic fails, accept the output rather than looping forever
         return {
@@ -180,6 +190,7 @@ def critic_node(state: SwarmState) -> dict:
     return {
         "passed": passed,
         "critique": critique,
+        "cloud_tokens": state.get("cloud_tokens", 0) + ctok,
         "history": state.get("history", []) + [
             f"critic: {'PASS' if passed else 'FAIL'}"
             + (f" ({critique[:80]})" if critique else "")
@@ -259,6 +270,7 @@ def run_task(task_id: str, task_description: str, agent_name: str) -> dict:
         "passed": False,
         "tools_called": [],
         "models_used": [],
+        "cloud_tokens": 0,
         "history": [],
     }
 
@@ -272,6 +284,7 @@ def run_task(task_id: str, task_description: str, agent_name: str) -> dict:
         "iterations_used": final.get("iterations", 0),
         "tools_called": final.get("tools_called", []),
         "models_used": final.get("models_used", []),
+        "cloud_tokens": final.get("cloud_tokens", 0),
         "critic_passed": final.get("passed", False),
         "history": final.get("history", []),
     }

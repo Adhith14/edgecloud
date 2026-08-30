@@ -170,6 +170,7 @@ def specialist_node(state: ChainState) -> dict:
         "current_index": idx + 1,
         "tools_called": state.get("tools_called", []) + result["tools_called"],
         "models_used": list(set(state.get("models_used", []) + [result["model"]])),
+        "decomposition_tokens": state.get("decomposition_tokens", 0) + result.get("tokens", 0),
         "history": state.get("history", []) + [
             f"subtask {idx+1}/{len(state['subtasks'])}: {sub['agent']} "
             f"({result['model']}) tools={result['tools_called'] or 'none'}"

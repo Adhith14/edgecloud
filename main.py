@@ -197,7 +197,7 @@ def run_agent_for_task(task, task_input, client):
             )
             return {"output": result["output"],
                     "tokens_used": result.get("cloud_tokens", 0),
-                    "is_cloud": False,
+                    "is_cloud": (config.MODEL_ASSIGNMENT == "cloud_swarm"),
                     "v2": result}
 
 
@@ -238,7 +238,13 @@ def run_agent_for_task(task, task_input, client):
         finally:
             signal.alarm(0)
 
-        return {"output": result["output"], "tokens_used": 0, "is_cloud": False,
+        # In the cloud swarm condition every agent call and every tool
+        # result crosses the network, so the task counts as cloud-executed
+        # and its inputs count towards data egress.
+        is_cloud_swarm = (config.MODEL_ASSIGNMENT == "cloud_swarm")
+        return {"output": result["output"],
+                "tokens_used": result.get("cloud_tokens", 0),
+                "is_cloud": is_cloud_swarm,
                 "v2": result}
     
     agent_name = task["agent"]
@@ -349,11 +355,20 @@ def main():
                 r.tools_called    = v2.get("tools_called", [])
                 r.models_used     = v2.get("models_used", [])
                 r.critic_passed   = v2.get("critic_passed")
-            # Cloud agents (multimodal) cost tokens — record them
-            if agent_result["is_cloud"]:
+
+            # Cloud-executed tasks incur token cost and data egress. This
+            # covers cloud-only execution, cloud vision, and the cloud swarm
+            # baseline, each priced against the model that actually ran.
+            if agent_result.get("is_cloud") and agent_result.get("tokens_used"):
+                if config.MODEL_ASSIGNMENT == "cloud_swarm" and agent_result.get("v2"):
+                    charged_model = config.CLOUD_AGENT_MODEL
+                elif task["agent"] == "multimodal_agent":
+                    charged_model = config.CLOUD_VISION_MODEL
+                else:
+                    charged_model = config.CLOUD_ONLY_MODEL
                 r.record_cloud_call(agent_result["tokens_used"],
                                     str(task_input),
-                                    model=config.CLOUD_VISION_MODEL)
+                                    model=charged_model)
         except Exception as e:
             print(f"    [ERROR] Agent failed: {e}")
             r.output = ""

@@ -1,0 +1,6 @@
+[
+  {"timestamp": "2026-06-18 08:07:01", "message": "Failed to connect to cache service: Connection refused"},
+  {"timestamp": "2026-06-18 08:07:08", "message": "Cache service unavailable after 3 retries. Falling back to database."},
+  {"timestamp": "2026-06-18 08:13:10", "message": "NullPointerException in OrderService.processOrder() at line 142"},
+  {"timestamp": "2026-06-18 08:19:55", "message": "Payment processing failed for order_id=9921: Timeout after 30s"}
+]

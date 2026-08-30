@@ -14,6 +14,7 @@
 
 from langchain_ollama import ChatOllama
 from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
 
 import config
 from tools import get_tools
@@ -68,13 +69,16 @@ def get_model_for(agent_name: str) -> str:
     """
     Returns the model name for an agent, honouring MODEL_ASSIGNMENT.
 
-    In shared_generalist mode every text agent uses the same model.
-    The vision agent is always exempt — text models cannot process
-    images at all, so forcing it would break the condition rather
-    than test it.
+    In shared_generalist mode every text agent uses the same local model.
+    In cloud_swarm mode every text agent uses the cloud model. The vision
+    agent is always exempt: text models cannot process images, so forcing
+    it would break the condition rather than test it.
     """
     if agent_name == "multimodal_agent":
         return config.V2_SPECIALIST_MODELS["multimodal_agent"]
+
+    if config.MODEL_ASSIGNMENT == "cloud_swarm":
+        return config.CLOUD_AGENT_MODEL
 
     if config.MODEL_ASSIGNMENT == "shared_generalist":
         return config.V2_SHARED_MODEL
@@ -91,10 +95,12 @@ def build_agent(agent_name: str):
     """
     model_name = get_model_for(agent_name)
 
-    llm = ChatOllama(
-        model=model_name,
-        temperature=0,          # deterministic, for reproducible runs
-    )
+    # Cloud swarm agents call the remote API; all other conditions run
+    # locally through Ollama. Tools execute on this machine either way.
+    if config.MODEL_ASSIGNMENT == "cloud_swarm":
+        llm = ChatOpenAI(model=model_name, temperature=0)
+    else:
+        llm = ChatOllama(model=model_name, temperature=0)
 
     return create_react_agent(
         llm,
@@ -145,10 +151,23 @@ def run_agent(agent_name: str, task_description: str, extra_context: str = "") -
     )
 
     # Walk the message history to record which tools were actually used
+    # Walk the message history to record which tools were used and how
+    # many tokens the agent consumed. Token counts are only present when
+    # the model is cloud-hosted; local models report nothing, which is
+    # correct since they incur no API charge.
     tools_called = []
+    tokens = 0
     for msg in result["messages"]:
         for call in (getattr(msg, "tool_calls", None) or []):
             tools_called.append(call.get("name", "?"))
+
+        meta = getattr(msg, "usage_metadata", None) or {}
+        if meta:
+            tokens += meta.get("total_tokens", 0)
+        else:
+            rmeta = getattr(msg, "response_metadata", None) or {}
+            usage = rmeta.get("token_usage") or rmeta.get("usage") or {}
+            tokens += usage.get("total_tokens", 0)
 
     # The final message holds the agent's answer
     output = ""
@@ -162,4 +181,5 @@ def run_agent(agent_name: str, task_description: str, extra_context: str = "") -
         "output": output,
         "tools_called": tools_called,
         "model": get_model_for(agent_name),
+        "tokens": tokens,
     }
