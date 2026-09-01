@@ -1,0 +1,52 @@
+A1 & File/Log Analysis & file & Read the server log and extract all ERROR-level events with timestamps, then summarise the root cause in one s... \\
+A2 & File/Log Analysis & file & Read this crash log and identify the root cause of the crash. Explain the chain of evidence in 2-3 sentences. \\
+A3 & File/Log Analysis & file & This CSV contains system metrics sampled every 5 minutes. Identify every row that contains an abnormal value (... \\
+A4 & File/Log Analysis & file & Summarise this server log into exactly 5 bullet points covering the most operationally important events. \\
+A5 & File/Log Analysis & file & Parse every ERROR-level line in this log into a JSON array. Each object must have fields: timestamp, message. ... \\
+A6 & File/Log Analysis & file & Analyse this metrics CSV. Identify any genuine anomaly that requires investigation, and explicitly state which... \\
+A7 & File/Log Analysis & file & This ETL log shows several job runs and one dashboard warning. Every job reports success. Determine whether th... \\
+B1 & Code Generation & code & Write a Python function called is\_prime(n) that returns True if n is prime, else False. \\
+B2 & Code Generation & code & Fix all bugs in this Python code so it runs correctly and prints the result:
+def average(nums):
+    total = 0
+... \\
+B3 & Code Generation & code & Write a function fizzbuzz(n) that returns 'Fizz' for multiples of 3, 'Buzz' for multiples of 5, 'FizzBuzz' for... \\
+B4 & Code Generation & code & Refactor this code to be cleaner and shorter without changing its behaviour. It must remain runnable and print... \\
+B5 & Code Generation & code & Given tables orders(id, customer\_id, amount, created\_at) and customers(id, name, country), write a single SQ... \\
+C1 & Planning & planning & Decompose into ordered subtasks: build a data pipeline that reads CSV files, cleans the data, and outputs a su... \\
+C2 & Planning & planning & Break down the goal 'add user authentication to an existing web application' into a prioritised, ordered task ... \\
+C3 & Planning & planning & A web application intermittently returns 500 errors for roughly 5% of requests, with no obvious pattern. Produ... \\
+C4 & Planning & planning & You manage a team of specialist AI agents: a file agent (reads/analyses files), a code agent (writes code), a ... \\
+C5 & Planning & planning & Outline the components required for a small REST API service with user authentication and a database layer. Fo... \\
+D1 & Document Processing & document & Summarise the provided document in 2-3 sentences. \\
+D2 & Document Processing & document & Produce a structured outline of this report with a heading for each section and one line summarising each sect... \\
+D3 & Document Processing & document & Extract every named entity from this report into three lists: people, organisations, and dates. Include moneta... \\
+D4 & Document Processing & document & Using ONLY this policy document, answer these three questions: (1) How many days per week can a full-time empl... \\
+D5 & Document Processing & document & Classify this document into exactly one of these categories: technical report, HR policy, marketing material, ... \\
+E1 & Multimodal & multimodal & Analyse the provided screenshot and describe any errors or issues, then suggest a fix. \\
+E2 & Multimodal & multimodal & Read this bar chart. State which expense category has the single highest bar and which economical class it bel... \\
+E3 & Multimodal & multimodal & Describe the system architecture shown in this diagram. It compares two builds. List the components of each bu... \\
+E4 & Multimodal & multimodal & Extract the table in this image into CSV format. Include the header row. Return ONLY the CSV, no commentary. \\
+E5 & Multimodal & multimodal & This screenshot shows Python source code and an error traceback together. Identify the exception type, state w... \\
+F1 & Ambiguous & file & The deployment failed last night. Look at the log and figure out what happened. \\
+F2 & Ambiguous & code & Clean up this function:
+def proc(d):
+    r = []
+    for i in range(len(d)):
+        if d[i] != None:
+         ... \\
+F3 & Ambiguous & planning & Can you help me get this project moving? It's been stalled for a while. \\
+F4 & Ambiguous & document & Something's off with this report — take a look. \\
+F5 & Ambiguous & document & Summarise the important parts of this document. \\
+G1 & Complex Multi & file & You are given three separate service logs. Correlate the errors across all three to identify a single shared r... \\
+G2 & Complex Multi & planning & Decompose the feature 'add user authentication' into subtasks across backend, frontend, database, and testing ... \\
+G3 & Complex Multi & code & Complete ALL THREE parts in one response: (1) write a Python function count\_words(text) that returns a dict o... \\
+G4 & Complex Multi & file & Read this pipeline definition and its last run output, then answer: which stage introduced the fault the finan... \\
+G5 & Complex Multi & file & You are given three inputs: a service's config file, a PagerDuty alert, and the service's log. Determine what ... \\
+G6 & Complex Multi & document & Three sources are provided about a rollback procedure. An engineer is about to perform a rollback based on one... \\
+G7 & Complex Multi & file & You are given a metrics CSV and an ETL log from overlapping time periods. Determine whether the two datasets d... \\
+G8 & Complex Multi & code & Complete all three parts and return one runnable Python script: (1) write a function detect\_drift(rows) that ... \\
+H1 & Chained Multi & file & The file buggy\_report.py contains a Python script with a bug. Read it, identify the bug, produce a corrected ... \\
+H2 & Chained Multi & file & Read the server log sample\_log.txt, extract the error events, then write and run a Python script that counts ... \\
+H3 & Chained Multi & document & Read the quarterly report report\_document.txt. Extract the monetary figures it contains, then write and run a... \\
+H4 & Chained Multi & file & Read the three service logs service\_a.log, service\_b.log and service\_c.log. Determine the root cause of the... \\
