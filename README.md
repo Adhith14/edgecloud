@@ -2,12 +2,6 @@
 
 **Evaluating hierarchical multi-agent systems with local small language models**
 
-MSc Artificial Intelligence — ECS8056 Themed Research Project
-Queen's University Belfast, School of Electronics, Electrical Engineering and Computer Science
-
-Author: Adhith Kuruthukulangara Lijo (40494229)
-Supervisor: Dr. Yujian Gan
-
 ---
 
 ## Overview
@@ -208,16 +202,5 @@ sufficient for any deployment processing untrusted input.
 
 ---
 
-## Development history
-
-Continuous development history is maintained at
-<https://github.com/Adhith14/edgecloud>. This repository holds the submitted
-version of the code.
-
----
-
-## Academic integrity
-
-This work was produced for ECS8056 at Queen's University Belfast. AI assistance
 used during development is acknowledged in the submitted Declaration of Academic
 Integrity.
