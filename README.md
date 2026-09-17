@@ -201,6 +201,3 @@ sandboxing: adequate for controlled evaluation with authored inputs, but not
 sufficient for any deployment processing untrusted input.
 
 ---
-
-used during development is acknowledged in the submitted Declaration of Academic
-Integrity.
